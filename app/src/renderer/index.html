@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; media-src 'self' blob:; connect-src 'self' http://127.0.0.1:8756" />
+  <title>Hermes</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="stage" class="state-idle">
+    <div id="bubble" class="hidden"><span id="bubble-text"></span></div>
+    <div id="speech" class="hidden"><span id="speech-text"></span></div>
+    <div id="history" class="hidden">
+      <div id="history-title">Histórico</div>
+      <div id="history-list"></div>
+    </div>
+    <div id="history-tab" class="hidden" title="Histórico de conversas">☰</div>
+    <input id="type-box" class="hidden" type="text" placeholder="Escreva a missão e aperte Enter…" autocomplete="off" spellcheck="false" />
+
+    <svg id="character" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bodyGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#7b8cff" />
+          <stop offset="55%" stop-color="#5b6cff" />
+          <stop offset="100%" stop-color="#3d3ddb" />
+        </linearGradient>
+        <radialGradient id="glowGrad" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0%" stop-color="#8b9bff" stop-opacity="0.55" />
+          <stop offset="100%" stop-color="#8b9bff" stop-opacity="0" />
+        </radialGradient>
+      </defs>
+
+      <circle id="ring" cx="100" cy="128" r="86" fill="none" stroke="#8b9bff" stroke-width="3" opacity="0" />
+      <ellipse id="glow" cx="100" cy="128" rx="88" ry="92" fill="url(#glowGrad)" />
+      <ellipse id="shadow" cx="100" cy="226" rx="46" ry="9" fill="#000" opacity="0.28" />
+
+      <g id="body">
+        <!-- clipe de papel reestilizado -->
+        <path
+          d="M 68 196
+             L 68 84
+             A 32 32 0 0 1 132 84
+             L 132 168
+             A 20 20 0 0 1 92 168
+             L 92 100
+             A 8 8 0 0 1 108 100
+             L 108 160"
+          fill="none" stroke="url(#bodyGrad)" stroke-width="17"
+          stroke-linecap="round" stroke-linejoin="round" />
+
+        <g id="face">
+          <g id="eye-left" class="eye">
+            <ellipse class="eye-white" cx="76" cy="74" rx="21" ry="24" fill="#fff" stroke="#2a2d4d" stroke-width="3.5" />
+            <circle class="pupil" cx="80" cy="80" r="8.5" fill="#1d2038" />
+            <circle class="sparkle" cx="84" cy="76" r="2.8" fill="#fff" />
+            <path class="lid" d="M 55 50 Q 76 38 97 50 L 97 74 Q 76 62 55 74 Z" fill="#5b6cff" opacity="0" />
+            <path class="brow" d="M 58 44 Q 76 34 94 44" fill="none" stroke="#2a2d4d" stroke-width="4.5" stroke-linecap="round" />
+          </g>
+          <g id="eye-right" class="eye">
+            <ellipse class="eye-white" cx="124" cy="74" rx="21" ry="24" fill="#fff" stroke="#2a2d4d" stroke-width="3.5" />
+            <circle class="pupil" cx="120" cy="80" r="8.5" fill="#1d2038" />
+            <circle class="sparkle" cx="124" cy="76" r="2.8" fill="#fff" />
+            <path class="lid" d="M 103 50 Q 124 38 145 50 L 145 74 Q 124 62 103 74 Z" fill="#5b6cff" opacity="0" />
+            <path class="brow" d="M 106 44 Q 124 34 142 44" fill="none" stroke="#2a2d4d" stroke-width="4.5" stroke-linecap="round" />
+          </g>
+          <ellipse id="mouth" cx="100" cy="112" rx="7" ry="3" fill="#1d2038" />
+        </g>
+      </g>
+    </svg>
+
+    <div id="status-label"></div>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

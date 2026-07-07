@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+python-multipart
+faster-whisper
+coqui-tts
+transformers>=4.48,<5
+numpy

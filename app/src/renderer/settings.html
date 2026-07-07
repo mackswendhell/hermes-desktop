@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>Hermes — Configurações</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #23252f;
+      color: #e8e4d8;
+      padding: 22px 26px;
+      font-size: 13px;
+    }
+    h1 { font-size: 16px; margin-bottom: 16px; color: #f6f1e3; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.7px; color: #b9b29d; margin: 18px 0 8px; }
+    label { display: block; margin: 8px 0 3px; color: #cfc9b8; }
+    input[type='text'] {
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid #45485a;
+      background: #2d303c;
+      color: #f0ecdf;
+      font-size: 13px;
+      outline: none;
+    }
+    input[type='text']:focus { border-color: #d29c4a; }
+    select {
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid #45485a;
+      background: #2d303c;
+      color: #f0ecdf;
+      font-size: 13px;
+      outline: none;
+    }
+    .row { display: flex; gap: 10px; }
+    .row > div { flex: 1; }
+    button {
+      margin-top: 10px;
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 1px solid #45485a;
+      background: #34374a;
+      color: #f0ecdf;
+      cursor: pointer;
+      font-size: 12.5px;
+    }
+    button:hover { background: #3d4157; }
+    button.primary { background: #d29c4a; border-color: #d29c4a; color: #23252f; font-weight: 600; }
+    button.primary:hover { background: #dfae61; }
+    textarea {
+      width: 100%;
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #45485a;
+      background: #2d303c;
+      color: #b9e2b4;
+      font-family: Consolas, monospace;
+      font-size: 11px;
+      min-height: 74px;
+      resize: none;
+    }
+    #status { margin-top: 10px; min-height: 18px; font-size: 12.5px; }
+    #status.ok { color: #8fd9a0; }
+    #status.err { color: #e89b8f; }
+    .hint { font-size: 11.5px; color: #948d78; margin-top: 4px; line-height: 1.4; }
+    .actions { display: flex; gap: 10px; align-items: center; margin-top: 18px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Configurações do assistente</h1>
+
+  <h2>Conexão com o Hermes (VPS)</h2>
+  <div class="row">
+    <div>
+      <label for="vpsHost">Endereço da VPS (IP ou domínio)</label>
+      <input type="text" id="vpsHost" placeholder="ex.: 203.0.113.10" />
+    </div>
+    <div style="max-width: 120px">
+      <label for="vpsUser">Usuário SSH</label>
+      <input type="text" id="vpsUser" placeholder="root" />
+    </div>
+  </div>
+  <label for="bridgeToken">Token da API (API_SERVER_KEY do Hermes)</label>
+  <input type="text" id="bridgeToken" placeholder="valor de API_SERVER_KEY no ~/.hermes/.env" />
+  <p class="hint">
+    No servidor, o arquivo ~/.hermes/.env precisa ter API_SERVER_ENABLED=true e API_SERVER_KEY com
+    este mesmo valor. Depois reinicie o gateway do Hermes.
+  </p>
+
+  <button id="btn-key">Mostrar chave SSH e comando de autorização</button>
+  <div id="key-area" class="hidden">
+    <p class="hint">Cole este comando no terminal da sua VPS (uma única vez) para autorizar o app:</p>
+    <textarea id="key-cmd" readonly></textarea>
+    <button id="btn-copy">Copiar comando</button>
+  </div>
+
+  <button id="btn-vps-setup">Configurar Hermes automaticamente</button>
+  <p class="hint">
+    Depois de autorizar a chave acima, este botão faz o resto sozinho: ativa a API do Hermes
+    na sua VPS, gera o token e reinicia o gateway.
+  </p>
+  <button id="btn-test" class="primary">Testar conexão</button>
+  <div id="status"></div>
+
+  <h2>Avançado</h2>
+  <label for="idleUnload">Hibernar modelos de voz (libera a placa de vídeo quando ocioso)</label>
+  <select id="idleUnload">
+    <option value="0">Desativado — modelos sempre carregados</option>
+    <option value="10">Após 10 minutos sem uso</option>
+    <option value="30">Após 30 minutos sem uso</option>
+    <option value="60">Após 1 hora sem uso</option>
+  </select>
+  <p class="hint">
+    Hibernando, a primeira resposta depois da pausa demora ~15–20 s a mais (recarga dos modelos).
+  </p>
+  <label for="voiceServerDir">Pasta do servidor de voz (vazio = padrão do projeto)</label>
+  <input type="text" id="voiceServerDir" placeholder="C:\caminho\para\voice-server" />
+  <label for="hotkey">Atalho global para falar</label>
+  <input type="text" id="hotkey" placeholder="Control+Alt+Space" />
+  <p class="hint">Formato do Electron: Control, Alt, Shift, Super + tecla. Ex.: Control+Alt+Space, F9.</p>
+
+  <div class="actions">
+    <button id="btn-save" class="primary">Salvar</button>
+    <span id="saved" class="hidden" style="color: #8fd9a0">Salvo ✓</span>
+  </div>
+
+  <script src="settings-ui.js"></script>
+</body>
+</html>

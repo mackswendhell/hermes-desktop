@@ -1,0 +1,564 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+#stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  cursor: grab;
+  --amp: 0;
+  /* tema padrão: azul índigo */
+  --c1: #7b8cff;
+  --c2: #5b6cff;
+  --c3: #3d3ddb;
+  --halo: #8b9bff;
+  --label: #cdd3ff;
+}
+
+#stage.theme-dourado {
+  --c1: #e5c46c;
+  --c2: #d29c4a;
+  --c3: #a56b38;
+  --halo: #dcb768;
+  --label: #ecd9a8;
+}
+
+#stage.theme-verde {
+  --c1: #6fd39b;
+  --c2: #3aa76d;
+  --c3: #1f7a52;
+  --halo: #7ad6a6;
+  --label: #bfe9d2;
+}
+
+#stage.theme-grafite {
+  --c1: #9aa3b2;
+  --c2: #6b7280;
+  --c3: #3f4652;
+  --halo: #aab3c2;
+  --label: #ccd3de;
+}
+
+#stage.theme-roxo {
+  --c1: #b79cf5;
+  --c2: #8b5cf6;
+  --c3: #5b34b8;
+  --halo: #b79cf5;
+  --label: #ddd0fa;
+}
+
+#stage.theme-ciano {
+  --c1: #7fd8e8;
+  --c2: #3fb5cc;
+  --c3: #1f7f96;
+  --halo: #8adbe8;
+  --label: #c8ecf2;
+}
+
+#bodyGrad stop:nth-of-type(1) {
+  stop-color: var(--c1);
+}
+
+#bodyGrad stop:nth-of-type(2) {
+  stop-color: var(--c2);
+}
+
+#bodyGrad stop:nth-of-type(3) {
+  stop-color: var(--c3);
+}
+
+#glowGrad stop {
+  stop-color: var(--halo);
+}
+
+#ring {
+  stroke: var(--halo);
+}
+
+.lid {
+  fill: var(--c2);
+}
+
+#character {
+  width: 200px;
+  height: 240px;
+  overflow: visible;
+  margin-left: 30px;
+}
+
+#body,
+.eye,
+.pupil,
+.lid,
+.brow,
+#mouth,
+#ring {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* ---------- balão de pensamento ---------- */
+#bubble {
+  position: absolute;
+  top: 6px;
+  left: 130px;
+  transform: translateX(-50%);
+  max-width: 236px;
+  background: #f6f1e3;
+  color: #3d3627;
+  border: 1px solid rgba(96, 82, 54, 0.22);
+  border-radius: 16px;
+  padding: 9px 13px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  box-shadow: 0 6px 22px rgba(8, 10, 36, 0.38);
+  z-index: 5;
+}
+
+#bubble-text {
+  display: block;
+  max-height: 106px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+#bubble-text::-webkit-scrollbar {
+  width: 5px;
+}
+
+#bubble-text::-webkit-scrollbar-thumb {
+  background: rgba(96, 82, 54, 0.28);
+  border-radius: 3px;
+}
+
+#bubble-text::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* bolinhas do balão de pensamento descendo até o personagem */
+#bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -11px;
+  left: 50%;
+  transform: translateX(-10px);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #f6f1e3;
+  border: 1px solid rgba(96, 82, 54, 0.22);
+}
+
+#bubble::before {
+  content: '';
+  position: absolute;
+  bottom: -21px;
+  left: 50%;
+  transform: translateX(4px);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f3edda;
+  border: 1px solid rgba(96, 82, 54, 0.18);
+}
+
+/* fala do usuário: mais discreta que a resposta do Hermes */
+#bubble.user {
+  background: #eee8d7;
+  font-style: italic;
+  color: #575040;
+}
+
+#bubble.user::after,
+#bubble.user::before {
+  background: #eee8d7;
+}
+
+#bubble.hidden {
+  display: none;
+}
+
+/* ---------- balão de fala (resposta do Hermes, à direita da boca) ---------- */
+#speech {
+  position: absolute;
+  left: 190px;
+  bottom: 112px;
+  width: 226px;
+  background: #f6f1e3;
+  color: #3d3627;
+  border: 1px solid rgba(96, 82, 54, 0.22);
+  border-radius: 16px;
+  padding: 9px 13px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  box-shadow: 0 6px 22px rgba(8, 10, 36, 0.38);
+  z-index: 5;
+}
+
+#speech-text {
+  display: block;
+  max-height: 190px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+#speech-text::-webkit-scrollbar {
+  width: 5px;
+}
+
+#speech-text::-webkit-scrollbar-thumb {
+  background: rgba(96, 82, 54, 0.28);
+  border-radius: 3px;
+}
+
+#speech-text::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* saída fina apontando para a boca */
+#speech::after {
+  content: '';
+  position: absolute;
+  left: -13px;
+  bottom: 14px;
+  border-style: solid;
+  border-width: 4px 14px 4px 0;
+  border-color: transparent #f6f1e3 transparent transparent;
+  filter: drop-shadow(-1px 0 0 rgba(96, 82, 54, 0.22));
+}
+
+#speech.hidden {
+  display: none;
+}
+
+/* fala no lado esquerdo da tela: personagem vai para a direita da janela */
+#stage.speech-left #character {
+  margin-left: 260px;
+}
+
+#stage.speech-left #bubble {
+  left: 360px;
+}
+
+#stage.speech-left #status-label {
+  left: 230px;
+}
+
+#stage.speech-left #type-box {
+  left: 250px;
+}
+
+#stage.speech-left #speech {
+  left: auto;
+  right: 190px;
+}
+
+#stage.speech-left #speech::after {
+  left: auto;
+  right: -13px;
+  border-width: 4px 0 4px 14px;
+  border-color: transparent transparent transparent #f6f1e3;
+  filter: drop-shadow(1px 0 0 rgba(96, 82, 54, 0.22));
+}
+
+/* ---------- histórico de conversas ---------- */
+#history {
+  position: absolute;
+  left: 190px;
+  top: 10px;
+  bottom: 44px;
+  width: 226px;
+  background: #f6f1e3;
+  color: #3d3627;
+  border: 1px solid rgba(96, 82, 54, 0.22);
+  border-radius: 16px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 6px 22px rgba(8, 10, 36, 0.38);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+}
+
+#stage.speech-left #history {
+  left: auto;
+  right: 190px;
+}
+
+#history.hidden {
+  display: none;
+}
+
+#history-title {
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #6b6047;
+  margin-bottom: 6px;
+}
+
+#history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+#history-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+#history-list::-webkit-scrollbar-thumb {
+  background: rgba(96, 82, 54, 0.28);
+  border-radius: 3px;
+}
+
+#history-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.h-q {
+  font-style: italic;
+  color: #6f6753;
+  margin-top: 9px;
+}
+
+.h-a {
+  color: #3d3627;
+  margin-top: 2px;
+}
+
+#history-tab {
+  position: absolute;
+  top: 148px;
+  left: 2px;
+  width: 24px;
+  height: 34px;
+  background: #f6f1e3;
+  border: 1px solid rgba(96, 82, 54, 0.28);
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 7;
+  font-size: 13px;
+  color: #6b6047;
+  box-shadow: 0 3px 10px rgba(8, 10, 36, 0.32);
+  user-select: none;
+}
+
+#history-tab:hover {
+  background: #efe8d5;
+}
+
+#history-tab.hidden {
+  display: none;
+}
+
+/* ---------- caixa de digitação (aparece no hover) ---------- */
+#type-box {
+  position: absolute;
+  bottom: 2px;
+  left: 20px;
+  width: 220px;
+  padding: 5px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(96, 82, 54, 0.3);
+  background: #f6f1e3;
+  color: #3d3627;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+  box-shadow: 0 3px 12px rgba(8, 10, 36, 0.35);
+  z-index: 6;
+}
+
+#type-box::placeholder {
+  color: #9a8f76;
+  font-style: italic;
+}
+
+#type-box.hidden {
+  display: none;
+}
+
+#status-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 260px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--label);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  min-height: 15px;
+}
+
+/* ---------- IDLE ---------- */
+#body {
+  animation: bob 3.4s ease-in-out infinite;
+}
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+
+#glow {
+  opacity: 0.5;
+  animation: glowPulse 3.4s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.6; }
+}
+
+.state-idle .lid {
+  animation: blink 4.6s infinite;
+}
+
+#eye-right .lid {
+  animation-delay: 0.05s;
+}
+
+@keyframes blink {
+  0%, 92%, 100% { opacity: 0; }
+  94%, 97% { opacity: 1; }
+}
+
+/* pupilas seguem o mouse (variáveis --px/--py vêm do rastreio do cursor) */
+.pupil {
+  transform: translate(var(--px, 0px), var(--py, 0px));
+  transition: transform 90ms linear;
+}
+
+.sparkle {
+  transform: translate(calc(var(--px, 0px) * 0.5), calc(var(--py, 0px) * 0.5));
+  transition: transform 90ms linear;
+}
+
+/* sobrancelhas reagem quando o mouse passa sobre o personagem */
+.brow {
+  transition: transform 0.16s ease-out;
+}
+
+#stage.hover .brow {
+  transform: translateY(-5px);
+}
+
+#stage.hover .eye-white {
+  transform: scale(1.05);
+  transition: transform 0.16s ease-out;
+}
+
+/* ---------- OUVINDO ---------- */
+.state-listening #ring {
+  opacity: 0.9;
+  animation: ringPulse 1.1s ease-out infinite;
+}
+
+@keyframes ringPulse {
+  0% { transform: scale(0.88); opacity: 0.9; }
+  100% { transform: scale(1.12); opacity: 0; }
+}
+
+.state-listening .pupil {
+  transform: translate(var(--px, 0px), var(--py, 0px)) scale(1.35);
+}
+
+.state-listening .brow {
+  transform: translateY(-5px);
+}
+
+.state-listening .eye-white {
+  transform: scale(1.08);
+}
+
+.state-listening #body {
+  animation: leanIn 0.5s ease-out forwards;
+}
+
+@keyframes leanIn {
+  to { transform: translateY(-4px) scale(1.04); }
+}
+
+/* ---------- PENSANDO ---------- */
+.state-thinking .pupil {
+  animation: orbit 1.15s linear infinite;
+}
+
+@keyframes orbit {
+  0% { transform: translate(0, -5px); }
+  25% { transform: translate(5px, 0); }
+  50% { transform: translate(0, 5px); }
+  75% { transform: translate(-5px, 0); }
+  100% { transform: translate(0, -5px); }
+}
+
+.state-thinking .brow {
+  transform: translateY(-3px) rotate(-4deg);
+}
+
+.state-thinking #body {
+  animation: ponder 1.6s ease-in-out infinite;
+}
+
+@keyframes ponder {
+  0%, 100% { transform: rotate(-2.5deg) translateY(-2px); }
+  50% { transform: rotate(2.5deg) translateY(-5px); }
+}
+
+/* ---------- FALANDO ---------- */
+.state-speaking #body {
+  animation: none;
+  transform: translateY(calc(var(--amp) * -10px)) scale(calc(1 + var(--amp) * 0.045));
+  transition: transform 70ms linear;
+}
+
+.state-speaking #mouth {
+  transform: scaleY(calc(1 + var(--amp) * 7)) scaleX(calc(1 + var(--amp) * 0.9));
+  transition: transform 60ms linear;
+}
+
+.state-speaking .brow {
+  transform: translateY(-2px);
+}
+
+/* ---------- ERRO ---------- */
+.state-error .brow {
+  transform: rotate(10deg) translateY(2px);
+}
+
+.state-error #eye-right .brow {
+  transform: rotate(-10deg) translateY(2px);
+}
+
+.state-error #glow {
+  opacity: 0.25;
+}
+
+#mouth {
+  transform: scaleY(1);
+}

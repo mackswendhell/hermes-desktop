@@ -1,0 +1,15 @@
+# dependências e builds
+app/node_modules/
+app/dist/
+app/release/
+
+# ambiente Python e caches
+voice-server/.venv/
+voice-server/__pycache__/
+**/__pycache__/
+
+# áudio gerado
+amostras-voz/
+
+# artefatos locais
+*.log
