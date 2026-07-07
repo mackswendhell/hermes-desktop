@@ -23,6 +23,10 @@ export interface HistoryEntry {
   a: string;
 }
 
+export type ChatAttachment =
+  | { kind: 'image'; name: string; dataUrl: string }
+  | { kind: 'text'; name: string; text: string };
+
 export interface HermesBridge {
   onPttToggle(cb: () => void): void;
   onSettingsChanged(cb: (settings: RendererSettings) => void): void;
@@ -42,7 +46,7 @@ export interface HermesBridge {
   sttLocal(wav: ArrayBuffer): Promise<string>;
   setWindowsVoices(names: string[]): void;
   onVoiceProgress(cb: (msg: string) => void): void;
-  askHermes(text: string): Promise<string>;
+  askHermes(text: string, attachments?: ChatAttachment[]): Promise<string>;
   voiceServerUp(): Promise<boolean>;
   openMenu(): void;
   setWide(wide: boolean): void;

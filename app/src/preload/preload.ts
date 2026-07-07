@@ -31,7 +31,8 @@ contextBridge.exposeInMainWorld('hermes', {
   onVoiceProgress: (cb: (msg: string) => void) => {
     ipcRenderer.on('voice-progress', (_e, m) => cb(m));
   },
-  askHermes: (text: string) => ipcRenderer.invoke('ask-hermes', text),
+  askHermes: (text: string, attachments?: unknown[]) =>
+    ipcRenderer.invoke('ask-hermes', text, attachments),
   voiceServerUp: () => ipcRenderer.invoke('voice-server-up'),
   openMenu: () => ipcRenderer.send('open-menu'),
   setWide: (wide: boolean) => ipcRenderer.send('set-wide', wide),

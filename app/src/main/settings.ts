@@ -22,6 +22,7 @@ export interface Settings {
   idleUnloadMin: number;
   voiceEngine: 'xtts' | 'leve' | 'texto';
   windowsVoice: string;
+  chatSessionId: string;
 }
 
 const defaults: Settings = {
@@ -41,6 +42,7 @@ const defaults: Settings = {
   idleUnloadMin: 10,
   voiceEngine: 'xtts',
   windowsVoice: '',
+  chatSessionId: '',
 };
 
 // com túnel SSH ativo, a API do Hermes aparece em localhost

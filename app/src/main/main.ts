@@ -12,7 +12,7 @@ import {
   hasVoiceServerVenv,
 } from './voiceServer';
 import { ensureWhisper, transcribeLocal, whisperReady } from './whisperLocal';
-import { askHermes, testBridge } from './hermes';
+import { askHermes, testBridge, ChatAttachment } from './hermes';
 import { startTunnel, stopTunnel } from './tunnel';
 import { openSettingsWindow } from './settingsWindow';
 import { ensureSshKey } from './sshKey';
@@ -145,13 +145,33 @@ function notifySettingsChanged(): void {
   win?.webContents.send('settings-changed', settings);
 }
 
+// mesmo tempo da hibernação da voz: sem uso, o personagem recolhe para a bandeja
+// (segue ativo — os modelos de voz hibernam por conta própria no server.py)
+let idleHideTimer: ReturnType<typeof setTimeout> | undefined;
+
+function bumpIdleHide(): void {
+  clearTimeout(idleHideTimer);
+  if (!settings.idleUnloadMin || settings.idleUnloadMin <= 0) return;
+  idleHideTimer = setTimeout(() => {
+    if (win?.isVisible()) {
+      win.hide();
+      log(`[idle] ${settings.idleUnloadMin} min sem uso — personagem recolhido para a bandeja`);
+    }
+  }, settings.idleUnloadMin * 60_000);
+}
+
 function buildMenu(): Menu {
   return Menu.buildFromTemplate([
       {
         label: 'Mostrar / ocultar',
         click: () => {
           if (!win) return;
-          win.isVisible() ? win.hide() : win.show();
+          if (win.isVisible()) {
+            win.hide();
+          } else {
+            win.show();
+            bumpIdleHide();
+          }
         },
       },
       {
@@ -299,7 +319,10 @@ function createTray(): void {
   tray = new Tray(icon);
   tray.setToolTip('Hermes — assistente de voz');
   refreshTrayMenu();
-  tray.on('click', () => win?.show());
+  tray.on('click', () => {
+    win?.show();
+    bumpIdleHide();
+  });
 }
 
 // posição aproximada do centro dos olhos dentro da janela
@@ -326,6 +349,7 @@ function registerHotkey(): void {
     log(`[hotkey] ${settings.hotkey} pressionado`);
     if (!win) return;
     if (!win.isVisible()) win.show();
+    bumpIdleHide();
     win.webContents.send('ptt-toggle');
   });
   log(ok ? `[hotkey] ${settings.hotkey} registrado` : `[hotkey] FALHA ao registrar ${settings.hotkey}`);
@@ -350,6 +374,7 @@ function setupIpc(): void {
     settings.position = { x, y };
     saveSettings(settings);
     dragStartPos = null;
+    bumpIdleHide();
   });
 
   ipcMain.handle('get-settings', () => settings);
@@ -375,10 +400,12 @@ function setupIpc(): void {
     }
     startProactive(settings, (text) => {
       if (win && !win.isVisible() && !hiddenByFullscreen) win.show();
+      bumpIdleHide();
       win?.webContents.send('proactive', text);
     });
     refreshTrayMenu();
     notifySettingsChanged();
+    bumpIdleHide();
     return settings;
   });
 
@@ -425,13 +452,20 @@ function setupIpc(): void {
     }
   });
 
-  ipcMain.handle('ask-hermes', async (_e, text: string) => {
-    return askHermes(text, settings, (delta) => win?.webContents.send('hermes-delta', delta));
+  ipcMain.handle('ask-hermes', async (_e, text: string, attachments?: ChatAttachment[]) => {
+    bumpIdleHide();
+    return askHermes(
+      text,
+      settings,
+      (delta) => win?.webContents.send('hermes-delta', delta),
+      attachments,
+    );
   });
 
   ipcMain.handle('voice-server-up', () => isVoiceServerUp());
 
   ipcMain.handle('stt-local', async (_e, buf: ArrayBuffer) => {
+    bumpIdleHide();
     if (!whisperReady()) await ensureWhisper(voiceProgress);
     return transcribeLocal(Buffer.from(buf));
   });
@@ -467,6 +501,7 @@ function setupIpc(): void {
   ipcMain.on('open-menu', () => {
     if (win) buildMenu().popup({ window: win });
     refreshTrayMenu();
+    bumpIdleHide();
   });
 
   ipcMain.on('hide-window', () => win?.hide());
@@ -480,6 +515,7 @@ if (!gotLock) {
   app.on('second-instance', () => {
     win?.show();
     win?.focus();
+    bumpIdleHide();
   });
 
   app.whenReady().then(() => {
@@ -501,8 +537,10 @@ if (!gotLock) {
     if (settings.voiceEngine === 'xtts') startVoiceServer();
     else if (!whisperReady()) ensureWhisper(voiceProgress).catch(() => undefined);
     startTunnel(settings);
+    bumpIdleHide();
     startProactive(settings, (text) => {
       if (win && !win.isVisible() && !hiddenByFullscreen) win.show();
+      bumpIdleHide();
       win?.webContents.send('proactive', text);
     });
     startProbe(({ obs, fs }) => {
@@ -516,6 +554,7 @@ if (!gotLock) {
       } else if (!fs && hiddenByFullscreen) {
         win?.show();
         hiddenByFullscreen = false;
+        bumpIdleHide();
       }
     });
   });

@@ -380,7 +380,7 @@ body {
   bottom: 2px;
   left: 20px;
   width: 220px;
-  padding: 5px 10px;
+  padding: 5px 28px 5px 10px;
   border-radius: 12px;
   border: 1px solid rgba(96, 82, 54, 0.3);
   background: #f6f1e3;
@@ -390,6 +390,7 @@ body {
   outline: none;
   box-shadow: 0 3px 12px rgba(8, 10, 36, 0.35);
   z-index: 6;
+  box-sizing: border-box;
 }
 
 #type-box::placeholder {
@@ -399,6 +400,93 @@ body {
 
 #type-box.hidden {
   display: none;
+}
+
+/* clipe de anexar, encostado na borda direita da caixa de digitação */
+#attach-btn {
+  position: absolute;
+  bottom: 4px;
+  left: 216px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+  z-index: 7;
+  opacity: 0.65;
+}
+
+#attach-btn:hover {
+  opacity: 1;
+}
+
+#attach-btn.hidden,
+#attach-input,
+#attach-bar.hidden {
+  display: none;
+}
+
+#stage.speech-left #attach-btn {
+  left: 446px;
+}
+
+/* anexos pendentes: miniaturas/fichas acima da caixa de digitação */
+#attach-bar {
+  position: absolute;
+  bottom: 32px;
+  left: 20px;
+  width: 220px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  z-index: 6;
+}
+
+#stage.speech-left #attach-bar {
+  left: 250px;
+}
+
+.attach-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 104px;
+  padding: 2px 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(96, 82, 54, 0.3);
+  background: #f6f1e3;
+  color: #3d3627;
+  font-size: 10px;
+  box-shadow: 0 2px 8px rgba(8, 10, 36, 0.3);
+}
+
+.attach-chip img {
+  width: 22px;
+  height: 22px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.attach-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attach-chip button {
+  border: none;
+  background: transparent;
+  color: #9a8f76;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.attach-chip button:hover {
+  color: #3d3627;
 }
 
 #status-label {

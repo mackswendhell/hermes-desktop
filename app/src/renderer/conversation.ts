@@ -8,6 +8,7 @@ import {
   setAmplitude,
   closeHistory,
 } from './character';
+import type { ChatAttachment } from './types.d';
 
 const VOICE_URL = 'http://127.0.0.1:8756';
 const MAX_RECORD_MS = 30_000;
@@ -133,12 +134,13 @@ export async function stopListening(): Promise<void> {
   }
 }
 
-export async function sendTyped(text: string): Promise<void> {
+// mensagem digitada: a resposta vem só em texto, sem voz
+export async function sendTyped(text: string, attachments?: ChatAttachment[]): Promise<void> {
   const state = getState();
   if (state !== 'idle' && state !== 'error') return;
   setState('thinking');
   try {
-    await respond(text);
+    await respond(text, false, attachments);
   } catch (err) {
     handleError(err);
   }
@@ -171,7 +173,7 @@ async function processUtterance(blob: Blob): Promise<void> {
     return;
   }
 
-  await respond(text);
+  await respond(text, true);
 }
 
 async function transcribe(blob: Blob, engine: string): Promise<string> {
@@ -265,9 +267,17 @@ function splitSentences(text: string): string[] {
 }
 
 // o texto vai preenchendo o balão em tempo real, mas a fala começa
-// só com a resposta completa (fala contínua, sem pausas entre frases)
-async function respond(text: string): Promise<void> {
-  showBubble(text, undefined, 'user');
+// só com a resposta completa (fala contínua, sem pausas entre frases).
+// viaVoice: pergunta falada responde com voz; digitada responde só em texto
+async function respond(
+  text: string,
+  viaVoice: boolean,
+  attachments?: ChatAttachment[],
+): Promise<void> {
+  const attLabel = attachments?.length
+    ? ` 📎 ${attachments.map((a) => a.name).join(', ')}`
+    : '';
+  showBubble(text + attLabel, undefined, 'user');
   const settings = await window.hermes.getSettings();
   const speaker = settings.ttsSpeaker || undefined;
   cancelRequested = false;
@@ -283,14 +293,14 @@ async function respond(text: string): Promise<void> {
 
   let reply: string;
   try {
-    reply = await window.hermes.askHermes(text);
+    reply = await window.hermes.askHermes(text, attachments);
   } finally {
     currentDelta = null;
   }
 
-  window.hermes.addHistory({ t: new Date().toISOString(), q: text, a: reply });
+  window.hermes.addHistory({ t: new Date().toISOString(), q: text + attLabel, a: reply });
   showSpeech(reply);
-  const silent = await speakOut(reply, settings);
+  const silent = viaVoice ? await speakOut(reply, settings) : true;
 
   if (getState() === 'speaking' || getState() === 'thinking') setState('idle');
   const hideMs = silent ? Math.max(8000, reply.length * 60) : 8000;

@@ -1,4 +1,4 @@
-import { Settings, effectiveBridgeUrl } from './settings';
+import { Settings, effectiveBridgeUrl, saveSettings } from './settings';
 
 const mockReplies = [
   'Oi, Macks! Ainda estou no modo de teste local, sem falar com a VPS. Mas a voz já funciona, né?',
@@ -72,12 +72,20 @@ export async function testBridge(settings: Settings): Promise<{ ok: boolean; mes
   }
 }
 
+// anexos do chat: imagem vai no formato multimodal da API; texto vai embutido na mensagem
+export type ChatAttachment =
+  | { kind: 'image'; name: string; dataUrl: string }
+  | { kind: 'text'; name: string; text: string };
+
 // resposta em streaming: cada pedaço chega via onDelta; o retorno é o texto completo.
-// O contexto da conversa fica do lado do Hermes (conversas nomeadas da API).
+// O contexto da conversa fica do lado do Hermes: /v1/chat/completions é stateless
+// e a continuidade é pelo header X-Hermes-Session-Id (o parâmetro "conversation"
+// só existe no /v1/responses). Guardamos o id no settings para sobreviver a restarts.
 export async function askHermes(
   text: string,
   settings: Settings,
   onDelta: (delta: string) => void,
+  attachments?: ChatAttachment[],
 ): Promise<string> {
   const bridgeUrl = effectiveBridgeUrl(settings);
   if (!bridgeUrl) {
@@ -87,24 +95,43 @@ export async function askHermes(
     return reply;
   }
 
+  let userText = text;
+  for (const a of attachments ?? []) {
+    if (a.kind === 'text') userText += `\n\n[Arquivo anexado: ${a.name}]\n${a.text}`;
+  }
+  const images = (attachments ?? []).filter((a) => a.kind === 'image');
+  const userContent =
+    images.length > 0
+      ? [
+          { type: 'text', text: userText },
+          ...images.map((i) => ({ type: 'image_url', image_url: { url: i.dataUrl } })),
+        ]
+      : userText;
+
   const res = await fetch(bridgeUrl.replace(/\/$/, '') + '/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(settings.bridgeToken ? { Authorization: `Bearer ${settings.bridgeToken}` } : {}),
+      ...(settings.chatSessionId ? { 'X-Hermes-Session-Id': settings.chatSessionId } : {}),
     },
     body: JSON.stringify({
       model: 'hermes-agent',
       messages: [
         { role: 'system', content: personaPrompt(settings.persona) },
-        { role: 'user', content: text },
+        { role: 'user', content: userContent },
       ],
-      conversation: 'assistente-desktop',
       stream: true,
     }),
     signal: AbortSignal.timeout(300_000),
   });
   if (!res.ok) throw new Error(`Hermes respondeu ${res.status}`);
+
+  const sessionId = res.headers.get('x-hermes-session-id');
+  if (sessionId && sessionId !== settings.chatSessionId) {
+    settings.chatSessionId = sessionId;
+    saveSettings(settings);
+  }
 
   const contentType = res.headers.get('content-type') ?? '';
   if (contentType.includes('application/json')) {

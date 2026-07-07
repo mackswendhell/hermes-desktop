@@ -110,15 +110,16 @@
   <div id="status"></div>
 
   <h2>Avançado</h2>
-  <label for="idleUnload">Hibernar modelos de voz (libera a placa de vídeo quando ocioso)</label>
+  <label for="idleUnload">Hibernar quando ocioso (libera a placa de vídeo e recolhe o personagem para a bandeja)</label>
   <select id="idleUnload">
-    <option value="0">Desativado — modelos sempre carregados</option>
+    <option value="0">Desativado — sempre visível e carregado</option>
     <option value="10">Após 10 minutos sem uso</option>
     <option value="30">Após 30 minutos sem uso</option>
     <option value="60">Após 1 hora sem uso</option>
   </select>
   <p class="hint">
-    Hibernando, a primeira resposta depois da pausa demora ~15–20 s a mais (recarga dos modelos).
+    Na bandeja ele continua ativo (atalho de falar e mensagens funcionam). A primeira resposta
+    depois da pausa demora ~15–20 s a mais (recarga dos modelos de voz).
   </p>
   <label for="voiceServerDir">Pasta do servidor de voz (vazio = padrão do projeto)</label>
   <input type="text" id="voiceServerDir" placeholder="C:\caminho\para\voice-server" />
