@@ -4,8 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { Settings } from './settings';
 import { log } from './logger';
-
-const SSH_EXE = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'OpenSSH', 'ssh.exe');
+import { SSH_EXE } from './platform';
 
 function run(settings: Settings, cmd: string): Promise<{ code: number; out: string }> {
   return new Promise((resolve) => {

@@ -7,20 +7,26 @@ async function load(): Promise<void> {
   $('vpsHost').value = s.vpsHost;
   $('vpsUser').value = s.vpsUser;
   $('bridgeToken').value = s.bridgeToken;
+  $('groqApiKey').value = s.groqApiKey;
   $('voiceServerDir').value = s.voiceServerDir;
   $('hotkey').value = s.hotkey;
   ($('idleUnload') as unknown as HTMLSelectElement).value = String(s.idleUnloadMin);
 }
 
-document.getElementById('btn-save')!.addEventListener('click', async () => {
+async function saveAll(): Promise<void> {
   await window.hermes.saveSettings({
     vpsHost: $('vpsHost').value.trim(),
     vpsUser: $('vpsUser').value.trim() || 'root',
     bridgeToken: $('bridgeToken').value.trim(),
+    groqApiKey: $('groqApiKey').value.trim(),
     voiceServerDir: $('voiceServerDir').value.trim(),
     hotkey: $('hotkey').value.trim() || 'Control+Alt+Space',
     idleUnloadMin: parseInt(($('idleUnload') as unknown as HTMLSelectElement).value, 10) || 0,
   });
+}
+
+document.getElementById('btn-save')!.addEventListener('click', async () => {
+  await saveAll();
   const saved = document.getElementById('saved')!;
   saved.classList.remove('hidden');
   setTimeout(() => saved.classList.add('hidden'), 2500);
@@ -38,11 +44,9 @@ document.getElementById('btn-copy')!.addEventListener('click', () => {
 
 document.getElementById('btn-vps-setup')!.addEventListener('click', async () => {
   const status = document.getElementById('status')!;
-  // garante que host/usuário digitados valem antes do setup
-  await window.hermes.saveSettings({
-    vpsHost: $('vpsHost').value.trim(),
-    vpsUser: $('vpsUser').value.trim() || 'root',
-  });
+  // salva tudo que foi digitado antes do setup — o load() do final recarrega o
+  // formulário, e um save parcial descartaria os outros campos (ex.: chave Groq)
+  await saveAll();
   status.textContent = 'Configurando a VPS… (até 30 s)';
   status.className = '';
   const r = await window.hermes.vpsSetup();

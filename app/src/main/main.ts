@@ -11,7 +11,8 @@ import {
   setVoiceIdleMinutes,
   hasVoiceServerVenv,
 } from './voiceServer';
-import { ensureWhisper, transcribeLocal, whisperReady } from './whisperLocal';
+import { ensureWhisper, transcribeLocal, whisperReady, whisperAvailable } from './whisperLocal';
+import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import { askHermes, testBridge, ChatAttachment } from './hermes';
 import { startTunnel, stopTunnel } from './tunnel';
 import { openSettingsWindow } from './settingsWindow';
@@ -34,9 +35,10 @@ let hiddenByFullscreen = false;
 
 let windowsVoices: string[] = [];
 
-const ENGINES: { label: string; id: 'xtts' | 'leve' | 'texto' }[] = [
-  { label: 'Voz completa (XTTS, precisa de GPU)', id: 'xtts' },
-  { label: 'Voz leve (voz do Windows)', id: 'leve' },
+const ENGINES: { label: string; id: 'xtts' | 'leve' | 'texto' | 'nuvem' }[] = [
+  { label: 'Voz completa (XTTS local — GPU NVIDIA ou Apple Silicon)', id: 'xtts' },
+  { label: 'Voz na nuvem (grátis, sem GPU)', id: 'nuvem' },
+  { label: 'Voz leve (voz do sistema)', id: 'leve' },
   { label: 'Só texto', id: 'texto' },
 ];
 
@@ -127,6 +129,12 @@ const VOICES: { label: string; id: string }[] = [
   { label: 'Feminina — Sofia Hellen', id: 'Sofia Hellen' },
 ];
 
+const EDGE_VOICES: { label: string; id: string }[] = [
+  { label: 'Masculina — Antonio', id: 'pt-BR-AntonioNeural' },
+  { label: 'Feminina — Francisca', id: 'pt-BR-FranciscaNeural' },
+  { label: 'Feminina — Thalita', id: 'pt-BR-ThalitaMultilingualNeural' },
+];
+
 const PERSONA_LABELS: { label: string; id: Persona }[] = [
   { label: 'Cavaleiro — servo leal em missão', id: 'cavaleiro' },
   { label: 'Normal — assistente direto', id: 'normal' },
@@ -192,10 +200,13 @@ function buildMenu(): Menu {
               notifySettingsChanged();
               if (eng.id === 'xtts') {
                 startVoiceServer();
-              } else if (!whisperReady()) {
-                ensureWhisper(voiceProgress).catch((err) =>
-                  voiceProgress(`falha ao baixar a voz leve: ${err.message}`),
-                );
+              } else {
+                stopVoiceServer();
+                if (!whisperReady()) {
+                  ensureWhisper(voiceProgress).catch((err) =>
+                    voiceProgress(`falha ao baixar a voz leve: ${err.message}`),
+                  );
+                }
               }
             },
           })),
@@ -219,6 +230,17 @@ function buildMenu(): Menu {
                 checked: settings.ttsSpeaker === v.id,
                 click: () => {
                   settings.ttsSpeaker = v.id;
+                  saveSettings(settings);
+                  refreshTrayMenu();
+                },
+              }))
+            : settings.voiceEngine === 'nuvem'
+            ? EDGE_VOICES.map((v) => ({
+                label: v.label,
+                type: 'radio' as const,
+                checked: settings.edgeVoice === v.id,
+                click: () => {
+                  settings.edgeVoice = v.id;
                   saveSettings(settings);
                   refreshTrayMenu();
                 },
@@ -295,7 +317,7 @@ function buildMenu(): Menu {
         })),
       },
       {
-        label: 'Iniciar com o Windows',
+        label: 'Iniciar com o sistema',
         type: 'checkbox',
         checked: settings.autoStart,
         click: (item) => {
@@ -315,7 +337,9 @@ function refreshTrayMenu(): void {
 }
 
 function createTray(): void {
-  const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray.png'));
+  // no macOS o ícone da menu bar é template image (nome termina em "Template")
+  const trayFile = process.platform === 'darwin' ? 'trayTemplate.png' : 'tray.png';
+  const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', trayFile));
   tray = new Tray(icon);
   tray.setToolTip('Hermes — assistente de voz');
   refreshTrayMenu();
@@ -382,7 +406,12 @@ function setupIpc(): void {
   ipcMain.handle('save-settings', (_e, patch: Partial<Settings>) => {
     const oldHotkey = settings.hotkey;
     const oldIdle = settings.idleUnloadMin;
+    const hadGroqKey = Boolean(settings.groqApiKey);
     settings = { ...settings, ...patch };
+    // chave Groq recém-preenchida com o app mudo em "texto": a intenção óbvia é falar
+    if (!hadGroqKey && settings.groqApiKey && settings.voiceEngine === 'texto') {
+      settings.voiceEngine = 'nuvem';
+    }
     saveSettings(settings);
     setVoiceServerDir(settings.voiceServerDir);
     setVoiceIdleMinutes(settings.idleUnloadMin);
@@ -391,7 +420,9 @@ function setupIpc(): void {
     applyScale();
     stopTunnel();
     startTunnel(settings);
-    if (settings.idleUnloadMin !== oldIdle) {
+    if (settings.voiceEngine !== 'xtts') {
+      stopVoiceServer();
+    } else if (settings.idleUnloadMin !== oldIdle) {
       // reinicia o servidor de voz para aplicar o novo tempo de hibernação
       stopVoiceServer();
       setTimeout(() => startVoiceServer(), 2000);
@@ -470,10 +501,26 @@ function setupIpc(): void {
     return transcribeLocal(Buffer.from(buf));
   });
 
+  ipcMain.handle('tts-nuvem', async (_e, text: string) => {
+    const tts = new MsEdgeTTS();
+    await tts.setMetadata(settings.edgeVoice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+    try {
+      // o texto entra num template SSML sem escape — proteger o XML
+      const safe = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const { audioStream } = tts.toStream(safe);
+      const chunks: Buffer[] = [];
+      for await (const chunk of audioStream) chunks.push(chunk as Buffer);
+      const buf = Buffer.concat(chunks);
+      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    } finally {
+      tts.close();
+    }
+  });
+
   ipcMain.on('windows-voices', (_e, names: string[]) => {
     windowsVoices = names;
     if (!settings.windowsVoice && names.length) {
-      settings.windowsVoice = names.find((n) => /maria|francisca/i.test(n)) ?? names[0];
+      settings.windowsVoice = names.find((n) => /luciana|joana|maria|francisca/i.test(n)) ?? names[0];
       saveSettings(settings);
     }
     refreshTrayMenu();
@@ -519,19 +566,25 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    // no macOS, Cmd+V/C/X/A só funcionam com um menu de aplicativo com os papéis de edição
+    if (process.platform === 'darwin') {
+      Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }]));
+    }
     settings = loadSettings();
     setVoiceServerDir(settings.voiceServerDir);
     setVoiceIdleMinutes(settings.idleUnloadMin);
-    // sem o ambiente da voz completa (outro PC, por exemplo), cai para a voz leve
+    // sem o ambiente da voz completa (outro PC, por exemplo), cai para a nuvem ou voz leve
     if (settings.voiceEngine === 'xtts' && !hasVoiceServerVenv()) {
-      settings.voiceEngine = 'leve';
+      settings.voiceEngine = settings.groqApiKey ? 'nuvem' : whisperAvailable() ? 'leve' : 'texto';
       saveSettings(settings);
-      log('[voice] voice-server ausente — usando voz leve');
+      log(`[voice] voice-server ausente — usando voz ${settings.voiceEngine}`);
     }
     createWindow();
     createTray();
     registerHotkey();
     setupIpc();
+    // primeiro uso: sem VPS configurada, abre direto as Configurações
+    if (!settings.vpsHost && !settings.bridgeUrl) openSettingsWindow();
     applyAutoStart();
     startCursorTracking();
     if (settings.voiceEngine === 'xtts') startVoiceServer();

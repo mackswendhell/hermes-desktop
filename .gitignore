@@ -13,3 +13,6 @@ amostras-voz/
 
 # artefatos locais
 *.log
+CLAUDE.local.md
+settings.json
+.env

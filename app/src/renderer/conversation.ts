@@ -8,7 +8,7 @@ import {
   setAmplitude,
   closeHistory,
 } from './character';
-import type { ChatAttachment } from './types.d';
+import type { ChatAttachment, RendererSettings } from './types.d';
 
 const VOICE_URL = 'http://127.0.0.1:8756';
 const MAX_RECORD_MS = 30_000;
@@ -59,7 +59,7 @@ export async function startListening(): Promise<void> {
     mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch {
     setState('error');
-    showSpeech('Não consegui acessar o microfone. Confere as permissões do Windows.', 6000);
+    showSpeech('Não consegui acessar o microfone. Confere as permissões do sistema.', 6000);
     setTimeout(() => setState('idle'), 6000);
     return;
   }
@@ -165,7 +165,7 @@ function errorMessage(err: unknown): string {
 
 async function processUtterance(blob: Blob): Promise<void> {
   const settings = await window.hermes.getSettings();
-  const text = await transcribe(blob, settings.voiceEngine ?? 'xtts');
+  const text = await transcribe(blob, settings);
 
   if (!text.trim()) {
     setState('idle');
@@ -176,7 +176,8 @@ async function processUtterance(blob: Blob): Promise<void> {
   await respond(text, true);
 }
 
-async function transcribe(blob: Blob, engine: string): Promise<string> {
+async function transcribe(blob: Blob, settings: RendererSettings): Promise<string> {
+  const engine = settings.voiceEngine ?? 'xtts';
   if (engine === 'xtts') {
     const form = new FormData();
     form.append('audio', blob, 'fala.webm');
@@ -185,9 +186,36 @@ async function transcribe(blob: Blob, engine: string): Promise<string> {
     const { text } = (await sttRes.json()) as { text: string };
     return text;
   }
+  let groqErr = '';
+  if (engine === 'nuvem') {
+    if (!settings.groqApiKey) {
+      throw new Error('voz na nuvem sem chave Groq — preencha e clique em Salvar nas Configurações');
+    }
+    try {
+      const form = new FormData();
+      form.append('file', blob, 'fala.webm');
+      form.append('model', 'whisper-large-v3-turbo');
+      form.append('language', 'pt');
+      const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${settings.groqApiKey}` },
+        body: form,
+      });
+      if (!res.ok) throw new Error(`Groq ${res.status}`);
+      return ((await res.json()) as { text: string }).text;
+    } catch (e) {
+      // rede/limite/chave inválida: tenta o whisper.cpp local abaixo, sem esconder a causa
+      groqErr = e instanceof Error ? e.message : String(e);
+    }
+  }
   // voz leve: whisper.cpp local via main process (precisa de WAV 16 kHz mono)
-  const wav = await blobToWav16k(blob);
-  return window.hermes.sttLocal(wav);
+  try {
+    const wav = await blobToWav16k(blob);
+    return await window.hermes.sttLocal(wav);
+  } catch (e) {
+    const local = e instanceof Error ? e.message : String(e);
+    throw new Error(groqErr ? `transcrição na nuvem falhou (${groqErr}) e a local também (${local})` : local);
+  }
 }
 
 async function blobToWav16k(blob: Blob): Promise<ArrayBuffer> {
@@ -319,7 +347,13 @@ async function speakOut(
 
   setState('speaking');
   if (engine === 'xtts') {
-    await playQueue(splitSentences(text), () => true, settings.ttsSpeaker || undefined);
+    await playQueue(splitSentences(text), () => true, (s) =>
+      fetchTtsWav(s, settings.ttsSpeaker || undefined),
+    );
+  } else if (engine === 'nuvem') {
+    const spoke = await playQueue(splitSentences(text), () => true, fetchTtsEdge);
+    // Edge fora do ar: resposta inteira na voz do Windows, sem misturar vozes
+    if (!spoke && !cancelRequested) await speakWindows(text, settings.windowsVoice);
   } else {
     await speakWindows(text, settings.windowsVoice);
   }
@@ -362,10 +396,11 @@ function speakWindows(text: string, voiceName: string): Promise<void> {
 async function playQueue(
   queue: string[],
   ended: () => boolean,
-  speaker?: string,
-): Promise<void> {
+  synthFn: (s: string) => Promise<AudioBuffer>,
+): Promise<boolean> {
   let ahead: Promise<AudioBuffer | null> | null = null;
-  const synth = (s: string) => fetchTtsWav(s, speaker).catch(() => null);
+  let played = false;
+  const synth = (s: string) => synthFn(s).catch(() => null);
 
   while (!cancelRequested) {
     let current: Promise<AudioBuffer | null>;
@@ -387,11 +422,18 @@ async function playQueue(
     const buffer = await current;
     if (cancelRequested) break;
     if (buffer) {
+      played = true;
       if (getState() === 'thinking') setState('speaking');
       await playBuffer(buffer);
     }
   }
   setAmplitude(0);
+  return played;
+}
+
+async function fetchTtsEdge(text: string): Promise<AudioBuffer> {
+  const mp3 = await window.hermes.ttsNuvem(text);
+  return ctx().decodeAudioData(mp3);
 }
 
 async function fetchTtsWav(text: string, speaker?: string): Promise<AudioBuffer> {

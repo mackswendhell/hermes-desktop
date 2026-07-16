@@ -20,8 +20,10 @@ export interface Settings {
   muted: boolean;
   size: string;
   idleUnloadMin: number;
-  voiceEngine: 'xtts' | 'leve' | 'texto';
+  voiceEngine: 'xtts' | 'leve' | 'texto' | 'nuvem';
   windowsVoice: string;
+  groqApiKey: string;
+  edgeVoice: string;
   chatSessionId: string;
 }
 
@@ -42,6 +44,8 @@ const defaults: Settings = {
   idleUnloadMin: 10,
   voiceEngine: 'xtts',
   windowsVoice: '',
+  groqApiKey: '',
+  edgeVoice: 'pt-BR-AntonioNeural',
   chatSessionId: '',
 };
 

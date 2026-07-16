@@ -109,6 +109,15 @@
   <button id="btn-test" class="primary">Testar conexão</button>
   <div id="status"></div>
 
+  <h2>Voz na nuvem</h2>
+  <label for="groqApiKey">Chave da API Groq (transcrição de voz gratuita)</label>
+  <input type="text" id="groqApiKey" placeholder="gsk_..." />
+  <p class="hint">
+    Chave gratuita em console.groq.com/keys. Usada só quando o motor de voz é
+    "Voz na nuvem" (menu do personagem → Voz). A fala usa as vozes gratuitas da
+    Microsoft e não precisa de chave.
+  </p>
+
   <h2>Avançado</h2>
   <label for="idleUnload">Hibernar quando ocioso (libera a placa de vídeo e recolhe o personagem para a bandeja)</label>
   <select id="idleUnload">

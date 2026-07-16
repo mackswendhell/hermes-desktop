@@ -3,8 +3,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { Settings } from './settings';
 import { log } from './logger';
+import { SSH_EXE } from './platform';
 
-const SSH_EXE = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'OpenSSH', 'ssh.exe');
 const POLL_MS = 60_000;
 // o Hermes escreve mensagens aqui (uma por linha) quando quer avisar o desktop
 const OUTBOX_CMD =

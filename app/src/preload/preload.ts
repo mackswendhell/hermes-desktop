@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('hermes', {
   addHistory: (entry: unknown) => ipcRenderer.send('history-add', entry),
   getHistory: () => ipcRenderer.invoke('history-get'),
   sttLocal: (wav: ArrayBuffer) => ipcRenderer.invoke('stt-local', wav),
+  ttsNuvem: (text: string) => ipcRenderer.invoke('tts-nuvem', text),
   setWindowsVoices: (names: string[]) => ipcRenderer.send('windows-voices', names),
   onVoiceProgress: (cb: (msg: string) => void) => {
     ipcRenderer.on('voice-progress', (_e, m) => cb(m));

@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { log } from './logger';
+import { isWin } from './platform';
 
 const VOICE_URL = 'http://127.0.0.1:8756';
 
@@ -23,8 +24,14 @@ function voiceServerDir(): string {
   return configuredDir || path.resolve(__dirname, '..', '..', 'voice-server');
 }
 
+function venvPython(): string {
+  return isWin
+    ? path.join(voiceServerDir(), '.venv', 'Scripts', 'python.exe')
+    : path.join(voiceServerDir(), '.venv', 'bin', 'python');
+}
+
 export function hasVoiceServerVenv(): boolean {
-  return existsSync(path.join(voiceServerDir(), '.venv', 'Scripts', 'python.exe'));
+  return existsSync(venvPython());
 }
 
 export async function isVoiceServerUp(): Promise<boolean> {
@@ -41,7 +48,7 @@ export async function startVoiceServer(): Promise<void> {
   if (proc || (await isVoiceServerUp())) return;
 
   const dir = voiceServerDir();
-  const python = path.join(dir, '.venv', 'Scripts', 'python.exe');
+  const python = venvPython();
   if (!existsSync(python)) {
     log(`[voice] venv não encontrado em ${python}`);
     return;

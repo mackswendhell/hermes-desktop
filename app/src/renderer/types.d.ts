@@ -13,8 +13,10 @@ export interface RendererSettings {
   muted: boolean;
   size: string;
   idleUnloadMin: number;
-  voiceEngine: 'xtts' | 'leve' | 'texto';
+  voiceEngine: 'xtts' | 'leve' | 'texto' | 'nuvem';
   windowsVoice: string;
+  groqApiKey: string;
+  edgeVoice: string;
 }
 
 export interface HistoryEntry {
@@ -44,6 +46,7 @@ export interface HermesBridge {
   addHistory(entry: HistoryEntry): void;
   getHistory(): Promise<HistoryEntry[]>;
   sttLocal(wav: ArrayBuffer): Promise<string>;
+  ttsNuvem(text: string): Promise<ArrayBuffer>;
   setWindowsVoices(names: string[]): void;
   onVoiceProgress(cb: (msg: string) => void): void;
   askHermes(text: string, attachments?: ChatAttachment[]): Promise<string>;

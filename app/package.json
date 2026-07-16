@@ -4,10 +4,13 @@
   "description": "Assistente de mesa do Hermes — personagem flutuante com conversa por voz",
   "main": "dist/main.js",
   "private": true,
+  "repository": "github:mackswendhell/hermes-desktop",
   "scripts": {
     "build": "node scripts/build.mjs",
     "start": "npm run build && electron .",
-    "dist": "npm run build && node scripts/make-ico.mjs && electron-builder --win"
+    "dist": "npm run dist:win",
+    "dist:win": "npm run build && node scripts/make-ico.mjs && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac"
   },
   "devDependencies": {
     "electron": "^33.0.0",
@@ -18,6 +21,7 @@
   "build": {
     "appId": "com.macks.hermes-assistente",
     "productName": "Hermes Assistente",
+    "afterPack": "scripts/mac-adhoc-sign.mjs",
     "directories": {
       "output": "release"
     },
@@ -28,10 +32,35 @@
       "target": "nsis",
       "icon": "assets/icon.ico"
     },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "assets/icon-mac.png",
+      "category": "public.app-category.utilities",
+      "identity": null,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "O Hermes usa o microfone para conversar por voz."
+      }
+    },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
       "shortcutName": "Hermes Assistente"
     }
+  },
+  "dependencies": {
+    "msedge-tts": "^2.0.7"
   }
 }

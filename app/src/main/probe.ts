@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from 'node:child_process';
 import { log } from './logger';
+import { isWin } from './platform';
 
 export interface ProbeState {
   obs: boolean;
@@ -45,6 +46,9 @@ while ($true) {
 let proc: ChildProcess | null = null;
 
 export function startProbe(onState: (state: ProbeState) => void): void {
+  // sonda usa PowerShell + user32.dll; no macOS apps em tela cheia vivem em
+  // Spaces separados, então o comportamento nem se aplica
+  if (!isWin) return;
   proc = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', PS_SCRIPT], {
     stdio: ['ignore', 'pipe', 'ignore'],
     windowsHide: true,

@@ -1,0 +1,40 @@
+# Copiado pelo publish.mjs para .github/workflows/release.yml na edição pública.
+# Push de tag v* → build win (nsis) + mac (dmg/zip universal) anexados à Release.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            args: --win
+          - os: macos-latest
+            args: --mac
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # --ignore-scripts: o preinstall do msedge-tts (only-allow pnpm) quebra o npm ci;
+      # o postinstall do electron (download do binário) roda manualmente na linha seguinte
+      - run: npm ci --ignore-scripts
+      - run: node node_modules/electron/install.js
+      - run: npm run build
+      - if: runner.os == 'Windows'
+        run: node scripts/make-ico.mjs
+      - run: npx electron-builder ${{ matrix.args }} --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'

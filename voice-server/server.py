@@ -12,8 +12,9 @@ os.environ.setdefault("COQUI_TOS_AGREED", "1")
 import torch
 
 # ctranslate2 (faster-whisper) precisa achar as DLLs de cuDNN/cuBLAS que vêm com o torch
+# (add_dll_directory só existe no Windows)
 _torch_lib = Path(torch.__file__).parent / "lib"
-if _torch_lib.is_dir():
+if hasattr(os, "add_dll_directory") and _torch_lib.is_dir():
     os.add_dll_directory(str(_torch_lib))
 
 import numpy as np

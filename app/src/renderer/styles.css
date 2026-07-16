@@ -322,6 +322,16 @@ body {
   padding-right: 3px;
 }
 
+#bubble-text,
+#bubble-text *,
+#speech-text,
+#speech-text *,
+#history-list,
+#history-list * {
+  user-select: text;
+  cursor: text;
+}
+
 #history-list::-webkit-scrollbar {
   width: 5px;
 }
