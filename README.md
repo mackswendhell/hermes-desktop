@@ -45,8 +45,15 @@ e, se você tiver GPU NVIDIA, instalar a voz de alta qualidade.
 - **Voz leve (local)**: transcrição com whisper.cpp em CPU e resposta com a voz nativa
   do sistema. Nada de nuvem — o áudio nunca sai do seu computador. No Windows o app baixa
   o whisper.cpp sozinho (~190 MB); no macOS instale antes com `brew install whisper-cpp`.
-- **Voz na nuvem (zero GPU)**: transcrição via Groq (chave gratuita) e fala via Edge TTS.
-  Preencha a chave da Groq nas Configurações.
+- **Voz na nuvem (zero GPU)**: transcrição via Groq e fala via Edge TTS — não precisa
+  de placa de vídeo nem de servidor de voz rodando. Como ativar:
+  1. Crie uma conta gratuita em [console.groq.com](https://console.groq.com) e acesse
+     **API Keys** em [console.groq.com/keys](https://console.groq.com/keys).
+  2. Clique em **Create API Key**, dê um nome qualquer e copie a chave (começa com `gsk_`).
+     Ela só aparece uma vez — guarde na hora.
+  3. No app, botão direito no personagem → **Configurações…**, cole a chave no campo
+     **Chave da Groq** e escolha o motor de voz **"Voz na nuvem"**. Pronto: o Edge TTS não
+     precisa de chave nenhuma.
 - **Voz completa (local, XTTS v2)**: vozes neurais muito mais naturais (8 opções,
   incluindo graves). No Windows com GPU NVIDIA: rode `instalar-voz.ps1` (PowerShell).
   No macOS (Apple Silicon roda em CPU mais rápido que o tempo real):
