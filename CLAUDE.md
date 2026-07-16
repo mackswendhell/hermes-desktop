@@ -25,7 +25,9 @@ dela. Leia o `README.md` para o panorama. Este arquivo é o seu roteiro de insta
    - Botão **"Mostrar chave SSH e comando de autorização"** → a pessoa cola o comando no
      terminal da VPS dela (você NÃO tem acesso à VPS dela; quem cola é ela).
    - Botão **"Configurar Hermes automaticamente"** → o app ativa `API_SERVER_ENABLED` no
-     `~/.hermes/.env`, gera token e reinicia o `hermes-gateway` via SSH.
+     `~/.hermes/.env`, gera token e reinicia o gateway via SSH — detecta sozinho se o
+     Hermes é nativo (systemd `hermes-gateway`) ou roda em Docker (container `hermes`
+     do compose oficial, que monta `~/.hermes` do host e usa a rede do host).
    - Botão **"Testar conexão"** deve responder "funcionando".
 
 4. **Voz**:
@@ -61,7 +63,8 @@ dela. Leia o `README.md` para o panorama. Este arquivo é o seu roteiro de insta
 - **"Permission denied (publickey)"** → a pessoa não colou (ou colou errado) o comando de
   autorização na VPS. Gere de novo na tela de Configurações.
 - **"Testar conexão" falha após configurar** → túnel demora ~30 s para reconectar;
-  confira também `systemctl status hermes-gateway` na VPS.
+  confira também `systemctl status hermes-gateway` na VPS (ou, em Docker,
+  `docker ps` / `docker logs hermes`).
 - **SmartScreen bloqueia o instalador** → "Mais informações → Executar assim mesmo"
   (app sem assinatura digital).
 - **Voz leve não entende nada** → microfone padrão errado no sistema; e a primeira

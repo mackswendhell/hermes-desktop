@@ -14,7 +14,10 @@ rodando na **sua VPS** — mesma memória e personalidade que você já tem no T
 
 1. **Windows 10/11 ou macOS**
 2. **Um Hermes Agent funcionando na sua VPS** (com gateway ativo). Se ainda não tem,
-   siga a doc oficial do Hermes primeiro.
+   siga a doc oficial do Hermes primeiro. Vale tanto para instalação nativa (systemd)
+   quanto **em Docker** — no caso do Docker, use o `docker-compose.yml` oficial do
+   hermes-agent (ele já monta `~/.hermes` do host e usa a rede do host, que é o que
+   o app precisa).
 3. Microfone (para falar) — ou use a caixinha de texto.
 
 ## Instalação
@@ -37,7 +40,7 @@ e, se você tiver GPU NVIDIA, instalar a voz de alta qualidade.
 4. Clique em **"Mostrar chave SSH e comando de autorização"**, copie o comando e cole no
    terminal da sua VPS (uma única vez).
 5. Clique em **"Configurar Hermes automaticamente"** — o app ativa a API do seu Hermes,
-   gera o token e reinicia o gateway sozinho.
+   gera o token e reinicia o gateway sozinho (detecta se é systemd ou Docker).
 6. Clique em **"Testar conexão"**. Pronto: clique no personagem (ou `Ctrl+Alt+Space`) e fale.
 
 ## Voz
