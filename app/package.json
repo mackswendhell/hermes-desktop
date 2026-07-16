@@ -1,6 +1,6 @@
 {
   "name": "hermes-assistente",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Assistente de mesa do Hermes — personagem flutuante com conversa por voz",
   "main": "dist/main.js",
   "private": true,
