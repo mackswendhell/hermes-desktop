@@ -14,6 +14,7 @@ export interface Settings {
   autoStart: boolean;
   ttsSpeaker: string;
   persona: Persona;
+  chatPersona: Persona;
   theme: string;
   voiceServerDir: string;
   speechSide: 'left' | 'right';
@@ -25,6 +26,11 @@ export interface Settings {
   groqApiKey: string;
   edgeVoice: string;
   chatSessionId: string;
+  /** conversa que o overlay e o chat compartilham (a última aberta no chat) */
+  activeChatId: string;
+  uiMode: 'overlay' | 'chat';
+  chatBounds?: { x: number; y: number; width: number; height: number };
+  chatPinned: boolean;
 }
 
 const defaults: Settings = {
@@ -36,6 +42,8 @@ const defaults: Settings = {
   autoStart: false,
   ttsSpeaker: 'Damien Black',
   persona: 'cavaleiro',
+  // o teatro do cavaleiro é da voz; no chat o padrão é o assistente direto
+  chatPersona: 'normal',
   theme: 'dourado',
   voiceServerDir: '',
   speechSide: 'left',
@@ -47,6 +55,9 @@ const defaults: Settings = {
   groqApiKey: '',
   edgeVoice: 'pt-BR-AntonioNeural',
   chatSessionId: '',
+  activeChatId: '',
+  uiMode: 'overlay',
+  chatPinned: false,
 };
 
 // com túnel SSH ativo, a API do Hermes aparece em localhost

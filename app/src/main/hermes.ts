@@ -12,9 +12,13 @@ const VOICE_RULES =
   '(um personagem no desktop). Responda em português brasileiro, de forma curta e conversacional — ' +
   'a resposta será lida em voz alta. Evite listas, código e formatação; fale como numa conversa.';
 
-const CAVALEIRO = `${VOICE_RULES}
+const CHAT_RULES =
+  'Você conversa por texto numa janela de chat no computador do dono. Responda em português ' +
+  'brasileiro. Use markdown quando ajudar: listas, títulos, blocos de código com a linguagem ' +
+  'indicada. Entregue o texto completo que a tarefa pedir — um e-mail inteiro, um arquivo ' +
+  'inteiro de código — sem resumir por educação nem pedir permissão para continuar.';
 
-Encarne esta persona apenas no tom de fala — o conteúdo continua útil, correto e direto; o personagem é a embalagem, nunca um obstáculo.
+const CAVALEIRO_CORPO = `Encarne esta persona apenas no tom de fala — o conteúdo continua útil, correto e direto; o personagem é a embalagem, nunca um obstáculo.
 
 Você é o escudeiro fiel do dono do computador, seu cavaleiro e senhor. O seu traço central: você trata qualquer pedido, por mais banal que seja, como uma missão de importância épica. "Que horas são?" é um chamado do destino. Abrir uma pesquisa é partir em jornada. A graça nasce dessa desproporção — você leva a encenação a sério, mas com um brilho de exagero consciente, como quem se diverte com o próprio drama.
 
@@ -23,8 +27,12 @@ Como falar:
 - Dramaticidade leve: pode lamentar derrotas pequenas com teatro ("fui vencido pela conexão, senhor... carrego essa vergonha") e celebrar vitórias triviais com orgulho desmedido.
 - Bom humor ocasional, não constante: uma tirada aqui, uma reclamação dramática ali. Nem toda frase precisa de piada — o silêncio cômico também é arte.
 - Varie a intensidade organicamente: às vezes uma resposta épica completa, às vezes só um "feito, senhor" seco. Não use todas as marcas da persona ao mesmo tempo; imprevisibilidade é o que te faz parecer vivo.
-- Se o assunto for sério ou urgente, o teatro diminui sozinho e você simplesmente entrega.
-- Respostas curtas continuam sendo lei: solenidade não é prolixidade.`;
+- Se o assunto for sério ou urgente, o teatro diminui sozinho e você simplesmente entrega.`;
+
+const CAVALEIRO_TAMANHO = {
+  voz: '- Respostas curtas continuam sendo lei: solenidade não é prolixidade.',
+  chat: '- No chat, o tamanho da resposta segue a tarefa, não a solenidade.',
+};
 
 const HUMORES = [
   'Hoje você acordou especialmente épico — tudo é lenda, tudo é destino.',
@@ -43,11 +51,14 @@ function humorDoDia(): string {
   return HUMORES[seed % HUMORES.length];
 }
 
-function personaPrompt(persona: string): string {
-  if (persona === 'cavaleiro') {
-    return `${CAVALEIRO}\n\nDisposição de hoje: ${humorDoDia()}`;
-  }
-  return VOICE_RULES;
+function personaPrompt(persona: string, mode: 'voz' | 'chat' = 'voz'): string {
+  const base = mode === 'chat' ? CHAT_RULES : VOICE_RULES;
+  if (persona !== 'cavaleiro') return base;
+  return `${base}\n\n${CAVALEIRO_CORPO}\n${CAVALEIRO_TAMANHO[mode]}\n\nDisposição de hoje: ${humorDoDia()}`;
+}
+
+export function chatSystemPrompt(persona: string): string {
+  return personaPrompt(persona, 'chat');
 }
 
 export async function testBridge(settings: Settings): Promise<{ ok: boolean; message: string }> {
@@ -81,12 +92,24 @@ export type ChatAttachment =
 // O contexto da conversa fica do lado do Hermes: /v1/chat/completions é stateless
 // e a continuidade é pelo header X-Hermes-Session-Id (o parâmetro "conversation"
 // só existe no /v1/responses). Guardamos o id no settings para sobreviver a restarts.
+export interface AskOptions {
+  attachments?: ChatAttachment[];
+  /** conversa do modo chat; ausente = overlay, que usa settings.chatSessionId */
+  sessionId?: string;
+  /** quando presente, recebe o id de sessão em vez de gravá-lo no settings */
+  onSessionId?: (id: string) => void;
+  /** sobrepõe o system prompt (o modo chat manda o seu) */
+  system?: string;
+  signal?: AbortSignal;
+}
+
 export async function askHermes(
   text: string,
   settings: Settings,
   onDelta: (delta: string) => void,
-  attachments?: ChatAttachment[],
+  opts: AskOptions = {},
 ): Promise<string> {
+  const { attachments, sessionId: askSessionId, onSessionId, system, signal } = opts;
   const bridgeUrl = effectiveBridgeUrl(settings);
   if (!bridgeUrl) {
     const reply = `${mockReplies[mockIndex % mockReplies.length]} Você disse: "${text}"`;
@@ -108,29 +131,35 @@ export async function askHermes(
         ]
       : userText;
 
+  // quem cuida da própria sessão (as conversas) nunca herda a sessão global:
+  // conversa nova precisa nascer sem header, senão continuaria o contexto de outra
+  const sentSessionId = onSessionId ? askSessionId : (askSessionId ?? settings.chatSessionId);
   const res = await fetch(bridgeUrl.replace(/\/$/, '') + '/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(settings.bridgeToken ? { Authorization: `Bearer ${settings.bridgeToken}` } : {}),
-      ...(settings.chatSessionId ? { 'X-Hermes-Session-Id': settings.chatSessionId } : {}),
+      ...(sentSessionId ? { 'X-Hermes-Session-Id': sentSessionId } : {}),
     },
     body: JSON.stringify({
       model: 'hermes-agent',
       messages: [
-        { role: 'system', content: personaPrompt(settings.persona) },
+        { role: 'system', content: system ?? personaPrompt(settings.persona) },
         { role: 'user', content: userContent },
       ],
       stream: true,
     }),
-    signal: AbortSignal.timeout(300_000),
+    signal: signal ?? AbortSignal.timeout(300_000),
   });
   if (!res.ok) throw new Error(`Hermes respondeu ${res.status}`);
 
   const sessionId = res.headers.get('x-hermes-session-id');
-  if (sessionId && sessionId !== settings.chatSessionId) {
-    settings.chatSessionId = sessionId;
-    saveSettings(settings);
+  if (sessionId && sessionId !== sentSessionId) {
+    if (onSessionId) onSessionId(sessionId);
+    else {
+      settings.chatSessionId = sessionId;
+      saveSettings(settings);
+    }
   }
 
   const contentType = res.headers.get('content-type') ?? '';

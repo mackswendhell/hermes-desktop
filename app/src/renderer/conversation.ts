@@ -1,4 +1,4 @@
-import {
+﻿import {
   setState,
   getState,
   showBubble,
@@ -9,8 +9,10 @@ import {
   closeHistory,
 } from './character';
 import type { ChatAttachment, RendererSettings } from './types.d';
+import { ctx } from './audio';
+import { transcribe } from './stt';
+import { speak, stopSpeaking } from './tts';
 
-const VOICE_URL = 'http://127.0.0.1:8756';
 const MAX_RECORD_MS = 30_000;
 const SILENCE_STOP_MS = 1400;
 const SILENCE_RMS = 0.012;
@@ -18,20 +20,13 @@ const SILENCE_RMS = 0.012;
 let mediaStream: MediaStream | null = null;
 let recorder: MediaRecorder | null = null;
 let chunks: Blob[] = [];
-let audioCtx: AudioContext | null = null;
 let stopTimer: ReturnType<typeof setTimeout> | undefined;
 let silenceRaf = 0;
 
 let cancelRequested = false;
-let currentSource: AudioBufferSourceNode | null = null;
 let currentDelta: ((d: string) => void) | null = null;
 
-window.hermes.onHermesDelta((d) => currentDelta?.(d));
-
-function ctx(): AudioContext {
-  if (!audioCtx) audioCtx = new AudioContext();
-  return audioCtx;
-}
+window.hermes.onHermesDelta((_reqId, d) => currentDelta?.(d));
 
 export function isListening(): boolean {
   return getState() === 'listening';
@@ -40,12 +35,7 @@ export function isListening(): boolean {
 // clique durante a fala: cala na hora
 export function cancelSpeech(): void {
   cancelRequested = true;
-  try {
-    currentSource?.stop();
-  } catch {
-    // já parado
-  }
-  speechSynthesis.cancel();
+  stopSpeaking();
   setAmplitude(0);
   setState('idle');
   setTimeout(() => {
@@ -176,124 +166,6 @@ async function processUtterance(blob: Blob): Promise<void> {
   await respond(text, true);
 }
 
-async function transcribe(blob: Blob, settings: RendererSettings): Promise<string> {
-  const engine = settings.voiceEngine ?? 'xtts';
-  if (engine === 'xtts') {
-    const form = new FormData();
-    form.append('audio', blob, 'fala.webm');
-    const sttRes = await fetch(`${VOICE_URL}/stt`, { method: 'POST', body: form });
-    if (!sttRes.ok) throw new Error(`STT falhou (${sttRes.status})`);
-    const { text } = (await sttRes.json()) as { text: string };
-    return text;
-  }
-  let groqErr = '';
-  if (engine === 'nuvem') {
-    if (!settings.groqApiKey) {
-      throw new Error('voz na nuvem sem chave Groq — preencha e clique em Salvar nas Configurações');
-    }
-    try {
-      const form = new FormData();
-      form.append('file', blob, 'fala.webm');
-      form.append('model', 'whisper-large-v3-turbo');
-      form.append('language', 'pt');
-      const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${settings.groqApiKey}` },
-        body: form,
-      });
-      if (!res.ok) throw new Error(`Groq ${res.status}`);
-      return ((await res.json()) as { text: string }).text;
-    } catch (e) {
-      // rede/limite/chave inválida: tenta o whisper.cpp local abaixo, sem esconder a causa
-      groqErr = e instanceof Error ? e.message : String(e);
-    }
-  }
-  // voz leve: whisper.cpp local via main process (precisa de WAV 16 kHz mono)
-  try {
-    const wav = await blobToWav16k(blob);
-    return await window.hermes.sttLocal(wav);
-  } catch (e) {
-    const local = e instanceof Error ? e.message : String(e);
-    throw new Error(groqErr ? `transcrição na nuvem falhou (${groqErr}) e a local também (${local})` : local);
-  }
-}
-
-async function blobToWav16k(blob: Blob): Promise<ArrayBuffer> {
-  const decoded = await ctx().decodeAudioData(await blob.arrayBuffer());
-  const rate = 16000;
-  const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * rate), rate);
-  const src = off.createBufferSource();
-  src.buffer = decoded;
-  src.connect(off.destination);
-  src.start();
-  const rendered = await off.startRendering();
-  const samples = rendered.getChannelData(0);
-
-  const buf = new ArrayBuffer(44 + samples.length * 2);
-  const view = new DataView(buf);
-  const writeStr = (o: number, s: string) => {
-    for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i));
-  };
-  writeStr(0, 'RIFF');
-  view.setUint32(4, 36 + samples.length * 2, true);
-  writeStr(8, 'WAVE');
-  writeStr(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, rate, true);
-  view.setUint32(28, rate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeStr(36, 'data');
-  view.setUint32(40, samples.length * 2, true);
-  for (let i = 0; i < samples.length; i++) {
-    view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 32767, true);
-  }
-  return buf;
-}
-
-function cleanSentence(s: string): string {
-  // o XTTS narra pontos finais literalmente; ?, ! ajudam a entonação e ficam
-  return s.replace(/[.…]+$/, '').trim();
-}
-
-// o XTTS trunca áudio acima de ~200 caracteres — quebra frases longas na vírgula
-const MAX_TTS_CHARS = 180;
-
-function chunkLong(s: string): string[] {
-  if (s.length <= MAX_TTS_CHARS) return [s];
-  const commas = [...s.matchAll(/,\s/g)].map((m) => m.index!);
-  let cut: number;
-  if (commas.length) {
-    const mid = s.length / 2;
-    cut = commas.reduce((a, b) => (Math.abs(b - mid) < Math.abs(a - mid) ? b : a)) + 1;
-  } else {
-    const space = s.lastIndexOf(' ', MAX_TTS_CHARS);
-    cut = space > 40 ? space : MAX_TTS_CHARS;
-  }
-  return [...chunkLong(s.slice(0, cut).trim()), ...chunkLong(s.slice(cut).trim())];
-}
-
-function splitSentences(text: string): string[] {
-  const parts = text
-    .replace(/\s+/g, ' ')
-    .split(/(?<=[.!?…])\s+/)
-    .map(cleanSentence)
-    .filter((s) => s.length > 1);
-
-  // junta pedaços muito curtos com o vizinho para não fragmentar o TTS
-  const merged: string[] = [];
-  for (const p of parts) {
-    if (merged.length > 0 && (p.length < 25 || merged[merged.length - 1].length < 25)) {
-      merged[merged.length - 1] += ', ' + p;
-    } else {
-      merged.push(p);
-    }
-  }
-  return (merged.length ? merged : [text]).flatMap(chunkLong);
-}
-
 // o texto vai preenchendo o balão em tempo real, mas a fala começa
 // só com a resposta completa (fala contínua, sem pausas entre frases).
 // viaVoice: pergunta falada responde com voz; digitada responde só em texto
@@ -326,7 +198,7 @@ async function respond(
     currentDelta = null;
   }
 
-  window.hermes.addHistory({ t: new Date().toISOString(), q: text + attLabel, a: reply });
+  // quem grava é o main, na mesma conversa do chat
   showSpeech(reply);
   const silent = viaVoice ? await speakOut(reply, settings) : true;
 
@@ -342,138 +214,9 @@ async function speakOut(
   text: string,
   settings: { muted: boolean; voiceEngine?: string; ttsSpeaker: string; windowsVoice: string },
 ): Promise<boolean> {
-  const engine = settings.voiceEngine ?? 'xtts';
-  if (settings.muted || engine === 'texto') return true;
-
+  if (settings.muted || (settings.voiceEngine ?? 'xtts') === 'texto') return true;
   setState('speaking');
-  if (engine === 'xtts') {
-    await playQueue(splitSentences(text), () => true, (s) =>
-      fetchTtsWav(s, settings.ttsSpeaker || undefined),
-    );
-  } else if (engine === 'nuvem') {
-    const spoke = await playQueue(splitSentences(text), () => true, fetchTtsEdge);
-    // Edge fora do ar: resposta inteira na voz do Windows, sem misturar vozes
-    if (!spoke && !cancelRequested) await speakWindows(text, settings.windowsVoice);
-  } else {
-    await speakWindows(text, settings.windowsVoice);
-  }
-  return false;
-}
-
-function speakWindows(text: string, voiceName: string): Promise<void> {
-  return new Promise((resolve) => {
-    const utter = new SpeechSynthesisUtterance(text.replace(/[*_#`]/g, ''));
-    const voices = speechSynthesis.getVoices();
-    const voice =
-      voices.find((v) => v.name === voiceName) ??
-      voices.find((v) => v.lang.toLowerCase().startsWith('pt'));
-    if (voice) utter.voice = voice;
-    utter.lang = 'pt-BR';
-    utter.rate = 1.05;
-
-    let raf = 0;
-    const t0 = performance.now();
-    utter.onstart = () => {
-      const tick = () => {
-        if (getState() !== 'speaking' || cancelRequested) return;
-        const t = performance.now() - t0;
-        setAmplitude(0.25 + 0.55 * Math.abs(Math.sin(t / 95)) * (0.6 + 0.4 * Math.random()));
-        raf = requestAnimationFrame(tick);
-      };
-      raf = requestAnimationFrame(tick);
-    };
-    const finish = () => {
-      cancelAnimationFrame(raf);
-      setAmplitude(0);
-      resolve();
-    };
-    utter.onend = finish;
-    utter.onerror = finish;
-    speechSynthesis.speak(utter);
-  });
-}
-
-async function playQueue(
-  queue: string[],
-  ended: () => boolean,
-  synthFn: (s: string) => Promise<AudioBuffer>,
-): Promise<boolean> {
-  let ahead: Promise<AudioBuffer | null> | null = null;
-  let played = false;
-  const synth = (s: string) => synthFn(s).catch(() => null);
-
-  while (!cancelRequested) {
-    let current: Promise<AudioBuffer | null>;
-    if (ahead) {
-      current = ahead;
-      ahead = null;
-    } else {
-      const s = queue.shift();
-      if (s === undefined) {
-        if (ended()) break;
-        await new Promise((r) => setTimeout(r, 120));
-        continue;
-      }
-      current = synth(s);
-    }
-    const next = queue.shift();
-    if (next !== undefined) ahead = synth(next);
-
-    const buffer = await current;
-    if (cancelRequested) break;
-    if (buffer) {
-      played = true;
-      if (getState() === 'thinking') setState('speaking');
-      await playBuffer(buffer);
-    }
-  }
-  setAmplitude(0);
-  return played;
-}
-
-async function fetchTtsEdge(text: string): Promise<AudioBuffer> {
-  const mp3 = await window.hermes.ttsNuvem(text);
-  return ctx().decodeAudioData(mp3);
-}
-
-async function fetchTtsWav(text: string, speaker?: string): Promise<AudioBuffer> {
-  const res = await fetch(`${VOICE_URL}/tts`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(speaker ? { text, speaker } : { text }),
-  });
-  if (!res.ok) throw new Error(`TTS falhou (${res.status})`);
-  const bytes = await res.arrayBuffer();
-  return ctx().decodeAudioData(bytes);
-}
-
-function playBuffer(buffer: AudioBuffer): Promise<void> {
-  return new Promise((resolve) => {
-    const source = ctx().createBufferSource();
-    currentSource = source;
-    source.buffer = buffer;
-    const analyser = ctx().createAnalyser();
-    analyser.fftSize = 512;
-    source.connect(analyser);
-    analyser.connect(ctx().destination);
-
-    const data = new Float32Array(analyser.fftSize);
-    const tick = () => {
-      analyser.getFloatTimeDomainData(data);
-      let sum = 0;
-      for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
-      const rms = Math.sqrt(sum / data.length);
-      setAmplitude(Math.min(1, rms * 7));
-      if (getState() === 'speaking') requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-
-    source.onended = () => {
-      if (currentSource === source) currentSource = null;
-      resolve();
-    };
-    source.start();
-  });
+  return speak(text, settings, setAmplitude);
 }
 
 // mensagens que o Hermes manda por conta própria (outbox na VPS)
@@ -495,7 +238,6 @@ async function drainProactive(): Promise<void> {
   if (!text) return;
 
   const settings = await window.hermes.getSettings();
-  window.hermes.addHistory({ t: new Date().toISOString(), q: '', a: text });
   showSpeech(text);
   cancelRequested = false;
   const silent = await speakOut(text, settings);

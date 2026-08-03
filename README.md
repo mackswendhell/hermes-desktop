@@ -69,12 +69,35 @@ e, se você tiver GPU NVIDIA, instalar a voz de alta qualidade.
   e aponte a "Pasta do servidor de voz" (Configurações) para a pasta `voice-server`.
 - **Só texto**: menu Voz → "Só texto".
 
+## Dois modos
+
+No menu da bandeja (ou botão direito no personagem) → **Modo**, você escolhe como quer usar
+o mesmo assistente:
+
+- **Personagem flutuante** — o clipe sobre as janelas, para falar e ouvir.
+- **Janela de chat** — um app de conversa de verdade: janela com barra de título que
+  minimiza para a barra de tarefas, conversas separadas e salvas (cada uma com foto,
+  fixar no topo, arquivar, renomear, exportar), busca, markdown com botão de copiar e
+  anexos que ele **lê de fato** — PDF, Word, Excel, PowerPoint, imagem e áudio
+  (transcrito no seu computador). Dá para gravar um áudio no compositor, pedir para
+  ouvir qualquer resposta, editar a última pergunta e regenerar a resposta. O clipe
+  aparece em miniatura ali no canto, reagindo enquanto você digita.
+
+**Os dois modos falam na mesma conversa**: o que você pergunta por voz aparece no chat e
+continua de onde parou, e vice-versa. Um clique troca de modo nos dois sentidos — o clipe
+em miniatura leva de volta ao personagem, e o 💬 no painel de histórico abre o chat.
+
+Cada conversa é um contexto separado, então dá para ter uma para e-mail, outra para
+agenda, outra para trabalho. A personalidade é escolhida por modo: por padrão o Cavaleiro
+épico-cômico na voz e o assistente direto no chat.
+
 ## O que ele faz
 
 Personagem animado que segue seu mouse com os olhos • conversa por voz ou texto •
 personalidades (Cavaleiro épico-cômico ou assistente direto) • 6 cores, 3 tamanhos •
-histórico de conversas • avisos proativos do seu Hermes • modo reduzido automático com
-OBS aberto e some em tela cheia (Windows) • hibernação da GPU configurável.
+conversas salvas, separadas e pesquisáveis • anexos lidos de verdade • avisos proativos do
+seu Hermes (com notificação do sistema no modo chat) • modo reduzido automático com OBS
+aberto e some em tela cheia (Windows) • hibernação da GPU configurável.
 
 ## Privacidade e segurança
 
@@ -82,8 +105,10 @@ OBS aberto e some em tela cheia (Windows) • hibernação da GPU configurável.
   na voz na nuvem, o áudio passa pela Groq e pelo Edge TTS.
 - A conexão com a sua VPS é um **túnel SSH** com chave dedicada — a API do Hermes nunca
   fica exposta na internet.
-- O app guarda configurações em `%APPDATA%\hermes-assistente` (Windows) ou
-  `~/Library/Application Support/hermes-assistente` (macOS) e nada mais.
+- O app guarda no seu computador as configurações e as conversas do modo chat —
+  `%APPDATA%\hermes-assistente` (Windows) ou `~/Library/Application Support/hermes-assistente`
+  (macOS), com uma conversa por arquivo em `chats/`. Nada é enviado para lugar nenhum
+  além do seu próprio Hermes.
 
 ## Licença
 

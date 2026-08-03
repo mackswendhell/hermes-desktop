@@ -24,76 +24,7 @@ body {
   justify-content: flex-end;
   cursor: grab;
   --amp: 0;
-  /* tema padrão: azul índigo */
-  --c1: #7b8cff;
-  --c2: #5b6cff;
-  --c3: #3d3ddb;
-  --halo: #8b9bff;
-  --label: #cdd3ff;
-}
-
-#stage.theme-dourado {
-  --c1: #e5c46c;
-  --c2: #d29c4a;
-  --c3: #a56b38;
-  --halo: #dcb768;
-  --label: #ecd9a8;
-}
-
-#stage.theme-verde {
-  --c1: #6fd39b;
-  --c2: #3aa76d;
-  --c3: #1f7a52;
-  --halo: #7ad6a6;
-  --label: #bfe9d2;
-}
-
-#stage.theme-grafite {
-  --c1: #9aa3b2;
-  --c2: #6b7280;
-  --c3: #3f4652;
-  --halo: #aab3c2;
-  --label: #ccd3de;
-}
-
-#stage.theme-roxo {
-  --c1: #b79cf5;
-  --c2: #8b5cf6;
-  --c3: #5b34b8;
-  --halo: #b79cf5;
-  --label: #ddd0fa;
-}
-
-#stage.theme-ciano {
-  --c1: #7fd8e8;
-  --c2: #3fb5cc;
-  --c3: #1f7f96;
-  --halo: #8adbe8;
-  --label: #c8ecf2;
-}
-
-#bodyGrad stop:nth-of-type(1) {
-  stop-color: var(--c1);
-}
-
-#bodyGrad stop:nth-of-type(2) {
-  stop-color: var(--c2);
-}
-
-#bodyGrad stop:nth-of-type(3) {
-  stop-color: var(--c3);
-}
-
-#glowGrad stop {
-  stop-color: var(--halo);
-}
-
-#ring {
-  stroke: var(--halo);
-}
-
-.lid {
-  fill: var(--c2);
+  /* a paleta vem de theme.css, com a classe theme-* aplicada aqui no #stage */
 }
 
 #character {
@@ -314,6 +245,26 @@ body {
   letter-spacing: 0.6px;
   color: #6b6047;
   margin-bottom: 6px;
+}
+
+/* atalho para continuar a leitura na janela de chat */
+#to-chat {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  padding: 2px 4px;
+  font-size: 13px;
+  line-height: 1;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+#to-chat:hover {
+  opacity: 1;
+  background: rgba(96, 82, 54, 0.12);
 }
 
 #history-list {

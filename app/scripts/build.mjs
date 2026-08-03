@@ -7,7 +7,13 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const dist = path.join(root, 'dist');
 mkdirSync(dist, { recursive: true });
 
-const common = { bundle: true, sourcemap: 'inline', logLevel: 'info' };
+const common = {
+  bundle: true,
+  sourcemap: 'inline',
+  logLevel: 'info',
+  // .mjs como texto: o worker do pdf.js vira blob em runtime (a CSP não deixa buscar arquivo)
+  loader: { '.svg': 'text', '.worker.min.mjs': 'text' },
+};
 
 await build({
   ...common,
@@ -43,9 +49,17 @@ await build({
   format: 'iife',
 });
 
-copyFileSync(path.join(root, 'src/renderer/index.html'), path.join(dist, 'index.html'));
-copyFileSync(path.join(root, 'src/renderer/settings.html'), path.join(dist, 'settings.html'));
-copyFileSync(path.join(root, 'src/renderer/styles.css'), path.join(dist, 'styles.css'));
+await build({
+  ...common,
+  entryPoints: [path.join(root, 'src/renderer/chat.ts')],
+  outfile: path.join(dist, 'chat.js'),
+  platform: 'browser',
+  format: 'iife',
+});
+
+for (const f of ['index.html', 'settings.html', 'styles.css', 'theme.css', 'chat.html', 'chat.css']) {
+  copyFileSync(path.join(root, 'src/renderer', f), path.join(dist, f));
+}
 mkdirSync(path.join(dist, 'assets'), { recursive: true });
 for (const f of readdirSync(path.join(root, 'assets'))) {
   copyFileSync(path.join(root, 'assets', f), path.join(dist, 'assets', f));

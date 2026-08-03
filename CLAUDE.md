@@ -44,13 +44,26 @@ dela. Leia o `README.md` para o panorama. Este arquivo é o seu roteiro de insta
      (Downloads grandes: ~2,5 GB de PyTorch + ~3,5 GB de modelos no primeiro uso.)
 
 5. **Verificação final**: personagem visível, `Ctrl+Alt+Space`, a pessoa fala, o Hermes
-   dela responde por voz. Menu do botão direito: Voz, Personalidade, Cor, Tamanho.
+   dela responde por voz. Menu do botão direito: Modo, Voz, Personalidade, Cor, Tamanho.
+
+6. **Mostre o modo chat**: menu → **Modo** → *Janela de chat*. Vale explicar que é a mesma
+   conversa dos dois lados e que ali dá para anexar arquivos. Para voltar, o clipe em
+   miniatura no canto do compositor; para ir, o 💬 no painel de histórico do personagem.
 
 ## Fatos técnicos que você vai precisar
 
 - Configurações/log: `%APPDATA%\hermes-assistente\` no Windows,
   `~/Library/Application Support/hermes-assistente` no macOS (`settings.json`, `app.log`).
   Settings sempre em UTF-8 **sem BOM**.
+- Dois modos de UI (`settings.uiMode`): `overlay` (personagem) e `chat` (janela de
+  conversa). Trocar de modo recria a janela — não reinicia o app, e o túnel e o servidor
+  de voz continuam de pé.
+- Conversas do chat: uma por arquivo em `chats/*.jsonl` dentro da pasta de configurações,
+  com as mídias em `chats/media/`. `activeChatId` no settings diz qual conversa os dois
+  modos estão usando; cada conversa tem a sua sessão no Hermes, então são contextos
+  separados. Nunca editar esses arquivos à mão com o app aberto.
+- Anexos: PDF é extraído no renderer (o pdf.js precisa de `DOMMatrix`), `.docx/.xlsx/.pptx`
+  no processo main, e áudio é transcrito pelo mesmo caminho da voz.
 - Túnel SSH: chave `~/.ssh/id_ed25519_hermes` → porta local 8642 → API do Hermes
   (`/v1/chat/completions`, Bearer = `bridgeToken` do settings).
 - Voz leve: binário e modelo em `%APPDATA%\hermes-assistente\whisper\`.
@@ -71,3 +84,5 @@ dela. Leia o `README.md` para o panorama. Este arquivo é o seu roteiro de insta
   transcrição após abrir o app é mais lenta (carga do modelo).
 - **macOS: voz leve reclama de whisper.cpp** → `brew install whisper-cpp` (o app procura
   o `whisper-cli` do Homebrew).
+- **Anexo grande ou PDF escaneado** → o limite é 20 MB por arquivo (25 MB para áudio), e
+  PDF sem camada de texto não tem o que extrair: peça um print, que vai como imagem.

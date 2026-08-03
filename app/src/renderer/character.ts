@@ -1,11 +1,19 @@
+import charSvg from './character.svg';
+
 export type CharState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
 
+// o SVG mora num arquivo só, usado pelo overlay e pela miniatura do chat
+const slot = document.getElementById('char-slot');
+if (slot) slot.innerHTML = charSvg;
+
+// balões, histórico e status só existem no overlay — no chat estes ids não vêm
+const $ = (id: string) => document.getElementById(id);
 const stage = document.getElementById('stage')!;
-const bubble = document.getElementById('bubble')!;
-const bubbleText = document.getElementById('bubble-text')!;
-const speech = document.getElementById('speech')!;
-const speechText = document.getElementById('speech-text')!;
-const statusLabel = document.getElementById('status-label')!;
+const bubble = $('bubble');
+const bubbleText = $('bubble-text');
+const speech = $('speech');
+const speechText = $('speech-text');
+const statusLabel = $('status-label');
 
 const statusText: Record<CharState, string> = {
   idle: '',
@@ -21,7 +29,7 @@ export function setState(state: CharState): void {
   stage.classList.remove(`state-${current}`);
   stage.classList.add(`state-${state}`);
   current = state;
-  statusLabel.textContent = statusText[state];
+  if (statusLabel) statusLabel.textContent = statusText[state];
   if (state !== 'speaking') setAmplitude(0);
 }
 
@@ -31,7 +39,7 @@ export function getState(): CharState {
 
 // mensagens transitórias (ex.: progresso de download da voz leve)
 export function setStatusText(msg: string): void {
-  if (current === 'idle') statusLabel.textContent = msg;
+  if (current === 'idle' && statusLabel) statusLabel.textContent = msg;
 }
 
 export function setAmplitude(amp: number): void {
@@ -54,6 +62,7 @@ let bubbleTimer: ReturnType<typeof setTimeout> | undefined;
 
 // balão de pensamento (bolinhas): o que você disse ao personagem
 export function showBubble(text: string, autoHideMs?: number, kind: 'user' | 'reply' = 'reply'): void {
+  if (!bubble || !bubbleText) return;
   bubbleText.textContent = text;
   bubble.classList.remove('hidden');
   bubble.classList.toggle('user', kind === 'user');
@@ -62,21 +71,21 @@ export function showBubble(text: string, autoHideMs?: number, kind: 'user' | 're
 }
 
 export function hideBubble(): void {
-  bubble.classList.add('hidden');
+  bubble?.classList.add('hidden');
 }
 
 let speechTimer: ReturnType<typeof setTimeout> | undefined;
 let speechSide: 'left' | 'right' = 'left';
 
-const historyPanel = document.getElementById('history')!;
-const historyList = document.getElementById('history-list')!;
-const historyTab = document.getElementById('history-tab')! as HTMLElement;
+const historyPanel = $('history');
+const historyList = $('history-list');
+const historyTab = $('history-tab') as HTMLElement | null;
 let historyOpen = false;
 
 export function setSpeechSide(side: 'left' | 'right'): void {
   speechSide = side;
   // a abinha do histórico fica do mesmo lado em que o painel abre
-  historyTab.style.left = side === 'left' ? '2px' : '230px';
+  if (historyTab) historyTab.style.left = side === 'left' ? '2px' : '230px';
 }
 
 export function isHistoryOpen(): boolean {
@@ -84,6 +93,7 @@ export function isHistoryOpen(): boolean {
 }
 
 export function openHistory(entries: { t: string; q: string; a: string }[]): void {
+  if (!historyPanel || !historyList || !speech) return;
   historyList.textContent = '';
   if (!entries.length) {
     const vazio = document.createElement('div');
@@ -112,7 +122,7 @@ export function openHistory(entries: { t: string; q: string; a: string }[]): voi
 }
 
 export function closeHistory(): void {
-  if (!historyOpen) return;
+  if (!historyOpen || !historyPanel || !speech) return;
   historyOpen = false;
   historyPanel.classList.add('hidden');
   if (speech.classList.contains('hidden')) {
@@ -123,6 +133,7 @@ export function closeHistory(): void {
 
 // balão de fala (rabinho na boca): a resposta do Hermes
 export function showSpeech(text: string, autoHideMs?: number): void {
+  if (!speech || !speechText) return;
   closeHistory();
   speechText.textContent = text;
   speech.classList.remove('hidden');
@@ -133,6 +144,7 @@ export function showSpeech(text: string, autoHideMs?: number): void {
 }
 
 export function hideSpeech(): void {
+  if (!speech) return;
   speech.classList.add('hidden');
   if (!historyOpen) {
     window.hermes.setWide(false);

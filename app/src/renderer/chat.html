@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <!-- worker-src blob: é só para o worker do pdf.js, que já vem bundlado e vira Blob em runtime -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; media-src 'self' blob: file:; img-src 'self' data: blob:; worker-src blob:; connect-src 'self' blob: http://127.0.0.1:8756 https://api.groq.com" />
+  <title>Hermes</title>
+  <link rel="stylesheet" href="theme.css" />
+  <link rel="stylesheet" href="chat.css" />
+</head>
+<body>
+  <div id="titlebar">
+    <span id="title-text">Hermes</span>
+    <div id="win-buttons">
+      <button id="btn-pin" title="Manter por cima das outras janelas">📌</button>
+      <button id="btn-min" title="Minimizar">&#8211;</button>
+      <button id="btn-max" title="Maximizar">&#9633;</button>
+      <button id="btn-close" title="Fechar (segue na bandeja)">&#10005;</button>
+    </div>
+  </div>
+
+  <div id="shell">
+    <aside id="sidebar">
+      <div id="side-top">
+        <input id="search" type="search" placeholder="Buscar nas conversas…" autocomplete="off" />
+        <button id="btn-new" title="Nova conversa">+ Nova conversa</button>
+      </div>
+      <div id="chat-list"></div>
+    </aside>
+
+    <div id="ctx-menu" class="hidden"></div>
+
+    <main id="main">
+      <header id="conv-header">
+        <button id="conv-avatar" class="avatar" title="Trocar a foto da conversa"></button>
+        <span id="conv-title">Nova conversa</span>
+      </header>
+
+      <div id="messages"></div>
+
+      <div id="composer">
+        <div id="attach-bar" class="hidden"></div>
+        <div id="composer-row">
+          <div id="stage" class="state-idle" title="Hermes">
+            <div id="char-slot"></div>
+          </div>
+          <button id="btn-attach" title="Anexar arquivo">📎</button>
+          <textarea id="input" rows="1" placeholder="Escreva para o Hermes… (Enter envia, Shift+Enter quebra linha)" spellcheck="false"></textarea>
+          <button id="btn-send" title="Enviar" class="hidden">➤</button>
+          <button id="btn-mic" title="Gravar um áudio">🎤</button>
+        </div>
+        <div id="composer-status"></div>
+        <input id="attach-input" type="file" multiple class="hidden" />
+        <input id="avatar-input" type="file" accept="image/*" class="hidden" />
+      </div>
+    </main>
+  </div>
+
+  <!-- prompt() não existe no Electron; <dialog> nativo faz o mesmo sem dependência -->
+  <dialog id="ask-dlg">
+    <form id="ask-form" method="dialog">
+      <label id="ask-label" for="ask-input"></label>
+      <input id="ask-input" type="text" autocomplete="off" spellcheck="false" />
+      <menu>
+        <button type="button" id="ask-cancel">Cancelar</button>
+        <button value="ok">Salvar</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <div id="drop-veil" class="hidden">solte os arquivos aqui</div>
+  <script src="chat.js"></script>
+</body>
+</html>

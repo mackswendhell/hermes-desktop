@@ -1,6 +1,18 @@
-import { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, nativeImage } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  Tray,
+  Menu,
+  globalShortcut,
+  ipcMain,
+  screen,
+  nativeImage,
+  shell,
+  dialog,
+  Notification,
+} from 'electron';
 import path from 'node:path';
-import { appendFileSync, readFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { loadSettings, saveSettings, Settings, Persona } from './settings';
 import { log } from './logger';
 import {
@@ -14,6 +26,27 @@ import {
 import { ensureWhisper, transcribeLocal, whisperReady, whisperAvailable } from './whisperLocal';
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import { askHermes, testBridge, ChatAttachment } from './hermes';
+import { createChatWindow } from './chatWindow';
+import {
+  appendMsg,
+  clearChat,
+  deleteChat,
+  ensureTitle,
+  exportChat,
+  listChats,
+  mediaPath,
+  newChat,
+  readChat,
+  saveMedia,
+  recapPrompt,
+  rewriteChat,
+  searchChats,
+  setMeta,
+  ChatMsg,
+  Chat,
+} from './chatStore';
+import { chatSystemPrompt } from './hermes';
+import { extractFile } from './extract';
 import { startTunnel, stopTunnel } from './tunnel';
 import { openSettingsWindow } from './settingsWindow';
 import { ensureSshKey } from './sshKey';
@@ -34,6 +67,7 @@ let obsActive = false;
 let hiddenByFullscreen = false;
 
 let windowsVoices: string[] = [];
+const inFlight = new Map<string, AbortController>();
 
 const ENGINES: { label: string; id: 'xtts' | 'leve' | 'texto' | 'nuvem' }[] = [
   { label: 'Voz completa (XTTS local — GPU NVIDIA ou Apple Silicon)', id: 'xtts' },
@@ -59,7 +93,7 @@ function uiScale(): number {
 }
 
 function applyScale(): void {
-  if (!win) return;
+  if (!win || settings.uiMode === 'chat') return;
   const s = uiScale();
   win.webContents.setZoomFactor(s);
   const [x, y] = win.getPosition();
@@ -82,12 +116,106 @@ function clampToScreen(x: number, y: number): { x: number; y: number } {
 }
 
 function createWindow(): void {
+  win = settings.uiMode === 'chat' ? createChatWindow(settings, saveChatBounds) : createOverlayWindow();
+  // arquivo solto na janela ou link clicado no markdown não podem navegar a página
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // erro de renderer sem DevTools aberto é invisível; no app.log dá para depurar.
+  // Só nível 3 (error): warning de biblioteca não é problema do usuário.
+  win.webContents.on('console-message', (_e, level, message, line, source) => {
+    if (level >= 3) log(`[renderer] ${source}:${line} ${message}`);
+  });
+  win.on('focus', () => setBadge(false));
+  win.on('closed', () => (win = null));
+}
+
+function saveChatBounds(b: { x: number; y: number; width: number; height: number }): void {
+  settings.chatBounds = b;
+  saveSettings(settings);
+}
+
+// trocar de modo troca a janela inteira; relaunch derrubaria túnel e voice-server
+function switchMode(mode: 'overlay' | 'chat'): void {
+  if (mode === settings.uiMode) return;
+  settings.uiMode = mode;
+  saveSettings(settings);
+  applyMode();
+}
+
+function applyMode(): void {
+  win?.destroy();
+  createWindow();
+  refreshTrayMenu();
+  bumpIdleHide();
+  log(`[modo] ${settings.uiMode}`);
+}
+
+// show() sozinho não restaura janela minimizada
+function showWin(): void {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  setBadge(false);
+}
+
+function setBadge(on: boolean): void {
+  // app.setBadgeCount() é no-op no Windows; o que funciona é o overlay do botão da barra
+  tray?.setToolTip(on ? 'Hermes — mensagem nova' : 'Hermes — assistente de voz');
+  if (process.platform !== 'win32' || !win || win.isDestroyed()) return;
+  win.setOverlayIcon(
+    on ? nativeImage.createFromPath(path.join(__dirname, 'assets', 'badge.png')) : null,
+    on ? 'mensagens novas' : '',
+  );
+}
+
+// os dois modos escrevem e leem a mesma conversa: a última aberta no chat.
+// Sem ela (primeira execução, conversa apagada), cai na mais recente da lista.
+function activeChat(): Chat {
+  const atual = settings.activeChatId ? readChat(settings.activeChatId) : null;
+  if (atual) return atual;
+  const primeira = listChats()[0];
+  const chat = (primeira && readChat(primeira.id)) ?? newChat();
+  setActiveChat(chat.id);
+  return chat;
+}
+
+function setActiveChat(id: string): void {
+  if (settings.activeChatId === id) return;
+  settings.activeChatId = id;
+  saveSettings(settings);
+}
+
+function onProactive(text: string): void {
+  const chatId = activeChat().id;
+  appendMsg(chatId, { type: 'msg', role: 'assistant', t: new Date().toISOString(), text });
+  if (settings.uiMode === 'overlay') {
+    if (win && !win.isVisible() && !hiddenByFullscreen) win.show();
+    bumpIdleHide();
+    win?.webContents.send('proactive', text);
+    return;
+  }
+  // no chat ele nunca fala nem rouba foco: só avisa pelo Windows
+  if (win?.isVisible() && !win.isMinimized() && win.isFocused()) {
+    win.webContents.send('proactive', text, chatId);
+    return;
+  }
+  const note = new Notification({ title: 'Hermes', body: text.slice(0, 250) });
+  note.on('click', () => {
+    showWin();
+    win?.webContents.send('chat-open', chatId);
+  });
+  note.show();
+  setBadge(true);
+}
+
+function createOverlayWindow(): BrowserWindow {
   const area = screen.getPrimaryDisplay().workArea;
   const pos = settings.position
     ? clampToScreen(settings.position.x, settings.position.y)
     : { x: area.x + area.width - WIN_W - 24, y: area.y + area.height - WIN_H - 24 };
 
-  win = new BrowserWindow({
+  const overlay = new BrowserWindow({
     width: WIN_W,
     height: WIN_H,
     x: pos.x,
@@ -103,11 +231,11 @@ function createWindow(): void {
       nodeIntegration: false,
     },
   });
-  win.setAlwaysOnTop(true, 'screen-saver');
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  win.loadFile(path.join(__dirname, 'index.html'));
-  win.webContents.on('did-finish-load', () => applyScale());
-  win.on('closed', () => (win = null));
+  overlay.setAlwaysOnTop(true, 'screen-saver');
+  overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  overlay.loadFile(path.join(__dirname, 'index.html'));
+  overlay.webContents.on('did-finish-load', () => applyScale());
+  return overlay;
 }
 
 function applyAutoStart(): void {
@@ -159,6 +287,8 @@ let idleHideTimer: ReturnType<typeof setTimeout> | undefined;
 
 function bumpIdleHide(): void {
   clearTimeout(idleHideTimer);
+  // no modo chat a janela nunca se recolhe sozinha (a VRAM hiberna pelo server.py de qualquer jeito)
+  if (settings.uiMode === 'chat') return;
   if (!settings.idleUnloadMin || settings.idleUnloadMin <= 0) return;
   idleHideTimer = setTimeout(() => {
     if (win?.isVisible()) {
@@ -168,19 +298,66 @@ function bumpIdleHide(): void {
   }, settings.idleUnloadMin * 60_000);
 }
 
+const MODES: { label: string; id: 'overlay' | 'chat' }[] = [
+  { label: 'Personagem flutuante', id: 'overlay' },
+  { label: 'Janela de chat', id: 'chat' },
+];
+
 function buildMenu(): Menu {
+  const overlayOnly: Electron.MenuItemConstructorOptions[] =
+    settings.uiMode !== 'overlay'
+      ? []
+      : [
+          {
+            label: 'Tamanho',
+            submenu: SIZES.map((sz) => ({
+              label: sz.label,
+              type: 'radio' as const,
+              checked: settings.size === sz.id,
+              click: () => {
+                settings.size = sz.id;
+                saveSettings(settings);
+                refreshTrayMenu();
+                applyScale();
+              },
+            })),
+          },
+          {
+            label: 'Posição da fala',
+            submenu: [
+              { label: 'Lado esquerdo da tela', id: 'left' as const },
+              { label: 'Lado direito da tela', id: 'right' as const },
+            ].map((p) => ({
+              label: p.label,
+              type: 'radio' as const,
+              checked: settings.speechSide === p.id,
+              click: () => {
+                settings.speechSide = p.id;
+                saveSettings(settings);
+                refreshTrayMenu();
+                notifySettingsChanged();
+              },
+            })),
+          },
+        ];
+
   return Menu.buildFromTemplate([
       {
         label: 'Mostrar / ocultar',
         click: () => {
           if (!win) return;
-          if (win.isVisible()) {
-            win.hide();
-          } else {
-            win.show();
-            bumpIdleHide();
-          }
+          if (win.isVisible() && !win.isMinimized()) win.hide();
+          else showWin();
         },
+      },
+      {
+        label: 'Modo',
+        submenu: MODES.map((m) => ({
+          label: m.label,
+          type: 'radio' as const,
+          checked: settings.uiMode === m.id,
+          click: () => switchMode(m.id),
+        })),
       },
       {
         label: `Falar (${settings.hotkey.replace('Control', 'Ctrl')})`,
@@ -259,49 +436,21 @@ function buildMenu(): Menu {
         ],
       },
       {
-        label: 'Personalidade',
+        // cada modo guarda a sua: cavaleiro na voz, direto no chat, ambos configuráveis
+        label: settings.uiMode === 'chat' ? 'Personalidade (no chat)' : 'Personalidade',
         submenu: PERSONA_LABELS.map((p) => ({
           label: p.label,
           type: 'radio' as const,
-          checked: settings.persona === p.id,
+          checked: (settings.uiMode === 'chat' ? settings.chatPersona : settings.persona) === p.id,
           click: () => {
-            settings.persona = p.id;
+            if (settings.uiMode === 'chat') settings.chatPersona = p.id;
+            else settings.persona = p.id;
             saveSettings(settings);
             refreshTrayMenu();
           },
         })),
       },
-      {
-        label: 'Tamanho',
-        submenu: SIZES.map((sz) => ({
-          label: sz.label,
-          type: 'radio' as const,
-          checked: settings.size === sz.id,
-          click: () => {
-            settings.size = sz.id;
-            saveSettings(settings);
-            refreshTrayMenu();
-            applyScale();
-          },
-        })),
-      },
-      {
-        label: 'Posição da fala',
-        submenu: [
-          { label: 'Lado esquerdo da tela', id: 'left' as const },
-          { label: 'Lado direito da tela', id: 'right' as const },
-        ].map((p) => ({
-          label: p.label,
-          type: 'radio' as const,
-          checked: settings.speechSide === p.id,
-          click: () => {
-            settings.speechSide = p.id;
-            saveSettings(settings);
-            refreshTrayMenu();
-            notifySettingsChanged();
-          },
-        })),
-      },
+      ...overlayOnly,
       {
         label: 'Cor',
         submenu: THEMES.map((t) => ({
@@ -344,7 +493,7 @@ function createTray(): void {
   tray.setToolTip('Hermes — assistente de voz');
   refreshTrayMenu();
   tray.on('click', () => {
-    win?.show();
+    showWin();
     bumpIdleHide();
   });
 }
@@ -356,7 +505,8 @@ let lastCursor = { x: -1, y: -1 };
 
 function startCursorTracking(): void {
   setInterval(() => {
-    if (!win || !win.isVisible()) return;
+    // no modo chat os olhos seguem o mousemove do DOM, dentro da janela
+    if (!win || !win.isVisible() || settings.uiMode === 'chat') return;
     const c = screen.getCursorScreenPoint();
     if (Math.abs(c.x - lastCursor.x) < 2 && Math.abs(c.y - lastCursor.y) < 2) return;
     lastCursor = c;
@@ -372,7 +522,7 @@ function registerHotkey(): void {
   const ok = globalShortcut.register(settings.hotkey, () => {
     log(`[hotkey] ${settings.hotkey} pressionado`);
     if (!win) return;
-    if (!win.isVisible()) win.show();
+    showWin();
     bumpIdleHide();
     win.webContents.send('ptt-toggle');
   });
@@ -406,6 +556,7 @@ function setupIpc(): void {
   ipcMain.handle('save-settings', (_e, patch: Partial<Settings>) => {
     const oldHotkey = settings.hotkey;
     const oldIdle = settings.idleUnloadMin;
+    const oldMode = settings.uiMode;
     const hadGroqKey = Boolean(settings.groqApiKey);
     settings = { ...settings, ...patch };
     // chave Groq recém-preenchida com o app mudo em "texto": a intenção óbvia é falar
@@ -413,6 +564,8 @@ function setupIpc(): void {
       settings.voiceEngine = 'nuvem';
     }
     saveSettings(settings);
+    // o modo define qual janela existe, então qualquer caminho que o mude tem de recriá-la
+    if (settings.uiMode !== oldMode) applyMode();
     setVoiceServerDir(settings.voiceServerDir);
     setVoiceIdleMinutes(settings.idleUnloadMin);
     if (settings.hotkey !== oldHotkey) registerHotkey();
@@ -429,11 +582,7 @@ function setupIpc(): void {
     } else {
       startVoiceServer();
     }
-    startProactive(settings, (text) => {
-      if (win && !win.isVisible() && !hiddenByFullscreen) win.show();
-      bumpIdleHide();
-      win?.webContents.send('proactive', text);
-    });
+    startProactive(settings, onProactive);
     refreshTrayMenu();
     notifySettingsChanged();
     bumpIdleHide();
@@ -454,43 +603,203 @@ function setupIpc(): void {
     return result;
   });
 
-  const historyFile = path.join(app.getPath('userData'), 'history.jsonl');
-
-  ipcMain.on('history-add', (_e, entry: { t: string; q: string; a: string }) => {
-    try {
-      appendFileSync(historyFile, JSON.stringify(entry) + '\n', 'utf-8');
-    } catch (err) {
-      log(`[history] falha ao gravar: ${err}`);
-    }
-  });
-
+  // o painel do overlay mostra a mesma conversa do chat, em pares pergunta/resposta.
+  // Proativa é assistant sem user antes, e sai com q vazio — como no history.jsonl antigo.
   ipcMain.handle('history-get', () => {
-    try {
-      return readFileSync(historyFile, 'utf-8')
-        .trim()
-        .split('\n')
-        .slice(-200)
-        .map((l) => {
-          try {
-            return JSON.parse(l);
-          } catch {
-            return null;
-          }
-        })
-        .filter(Boolean);
-    } catch {
-      return [];
+    const out: { t: string; q: string; a: string }[] = [];
+    let q = '';
+    for (const m of activeChat().msgs) {
+      if (m.role === 'user') q = m.text;
+      else if (m.role === 'assistant') {
+        out.push({ t: m.t, q, a: m.text });
+        q = '';
+      }
     }
+    return out.slice(-200);
   });
 
   ipcMain.handle('ask-hermes', async (_e, text: string, attachments?: ChatAttachment[]) => {
     bumpIdleHide();
-    return askHermes(
+    const chat = activeChat();
+    appendMsg(chat.id, {
+      type: 'msg',
+      role: 'user',
+      t: new Date().toISOString(),
       text,
-      settings,
-      (delta) => win?.webContents.send('hermes-delta', delta),
+      atts: (attachments ?? []).map((a) =>
+        a.kind === 'image'
+          ? { kind: 'image' as const, name: a.name, dataUrl: a.dataUrl }
+          : { kind: 'text' as const, name: a.name },
+      ),
+    });
+    // sessão perdida no servidor: reenvia o contexto local uma vez
+    const prompt = chat.sessionId || !chat.msgs.length ? text : recapPrompt(chat.msgs, text);
+    const reply = await askHermes(prompt, settings, (delta) => win?.webContents.send('hermes-delta', '', delta), {
       attachments,
-    );
+      sessionId: chat.sessionId,
+      onSessionId: (id) => setMeta(chat.id, { sessionId: id }),
+    });
+    appendMsg(chat.id, { type: 'msg', role: 'assistant', t: new Date().toISOString(), text: reply });
+    ensureTitle(chat.id);
+    return reply;
+  });
+
+  ipcMain.on('ask-abort', (_e, reqId: string) => {
+    inFlight.get(reqId)?.abort();
+    inFlight.delete(reqId);
+  });
+
+  ipcMain.handle('extract-file', (_e, name: string, buffer: ArrayBuffer) => extractFile(name, buffer));
+
+  ipcMain.handle('chat-list', () => listChats());
+  // abrir ou criar uma conversa no chat é o que define para onde o overlay fala
+  ipcMain.handle('chat-open', (_e, id: string) => {
+    const chat = readChat(id);
+    if (chat) setActiveChat(id);
+    return chat;
+  });
+  ipcMain.handle('chat-new', () => {
+    const chat = newChat();
+    setActiveChat(chat.id);
+    return chat;
+  });
+  ipcMain.handle('chat-rename', (_e, id: string, title: string) => setMeta(id, { title }));
+  ipcMain.handle('chat-delete', (_e, id: string) => {
+    deleteChat(id);
+    if (settings.activeChatId === id) setActiveChat('');
+  });
+  ipcMain.handle('chat-clear', (_e, id: string) => clearChat(id));
+  ipcMain.handle('media-save', (_e, buf: ArrayBuffer, ext: string) => saveMedia(buf, ext));
+  ipcMain.handle('media-path', (_e, name: string) => mediaPath(name));
+  ipcMain.handle('chat-meta', (_e, id: string, patch: Record<string, unknown>) => setMeta(id, patch));
+  ipcMain.handle('chat-search', (_e, q: string) => searchChats(q));
+
+  ipcMain.handle('chat-export', async (_e, id: string) => {
+    const out = exportChat(id);
+    if (!out) return null;
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath: out.name,
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    });
+    if (canceled || !filePath) return null;
+    writeFileSync(filePath, out.markdown, 'utf-8');
+    return filePath;
+  });
+
+  // O main é o dono do disco: grava a pergunta antes de chamar e a resposta ao terminar.
+  ipcMain.handle(
+    'chat-ask',
+    async (
+      _e,
+      req: {
+        chatId: string;
+        reqId: string;
+        text: string;
+        attachments?: ChatAttachment[];
+        /** áudio gravado no chat: fica tocável na bolha, o modelo recebe a transcrição */
+        audio?: { file: string; name: string };
+        /** regenerar: não grava a pergunta e substitui a última resposta */
+        mode?: 'normal' | 'regen';
+      },
+    ) => {
+      const chat = readChat(req.chatId);
+      if (!chat) throw new Error('Conversa não encontrada');
+
+      const now = () => new Date().toISOString();
+      if (req.mode !== 'regen') {
+        appendMsg(req.chatId, {
+          type: 'msg',
+          role: 'user',
+          t: now(),
+          text: req.text,
+          atts: [
+            ...(req.audio ? [{ kind: 'audio' as const, ...req.audio }] : []),
+            ...(req.attachments ?? []).map((a) =>
+              a.kind === 'image'
+                ? { kind: 'image' as const, name: a.name, dataUrl: a.dataUrl }
+                : { kind: 'text' as const, name: a.name },
+            ),
+          ],
+        });
+      }
+
+      // sessão perdida no servidor: reenvia o contexto local uma vez
+      const prompt = chat.sessionId || !chat.msgs.length ? req.text : recapPrompt(chat.msgs, req.text);
+
+      const controller = new AbortController();
+      inFlight.set(req.reqId, controller);
+      const timeout = setTimeout(() => controller.abort(), 300_000);
+      let reply = '';
+      try {
+        reply = await askHermes(
+          prompt,
+          settings,
+          (delta) => win?.webContents.send('hermes-delta', req.reqId, delta),
+          {
+            attachments: req.attachments,
+            sessionId: chat.sessionId,
+            system: chatSystemPrompt(settings.chatPersona),
+            signal: controller.signal,
+            onSessionId: (id) => {
+              const perdeu = Boolean(chat.sessionId) && chat.sessionId !== id && chat.msgs.length > 0;
+              setMeta(req.chatId, { sessionId: id });
+              if (perdeu) {
+                appendMsg(req.chatId, {
+                  type: 'msg',
+                  role: 'system',
+                  t: now(),
+                  text: 'O Hermes começou uma sessão nova — ele pode não lembrar do que veio antes.',
+                });
+              }
+            },
+          },
+        );
+      } finally {
+        clearTimeout(timeout);
+        inFlight.delete(req.reqId);
+      }
+
+      if (req.mode === 'regen') {
+        const atual = readChat(req.chatId)!;
+        const last = atual.msgs[atual.msgs.length - 1];
+        if (last?.role === 'assistant') atual.msgs.pop();
+        atual.msgs.push({ type: 'msg', role: 'assistant', t: now(), text: reply });
+        rewriteChat(atual);
+      } else {
+        appendMsg(req.chatId, { type: 'msg', role: 'assistant', t: now(), text: reply });
+      }
+      const title = ensureTitle(req.chatId);
+      return { reply, title };
+    },
+  );
+
+  // editar e reenviar: trunca a conversa e rotaciona a sessão, porque o contexto
+  // é server-side e o modelo veria a pergunta velha e a nova ao mesmo tempo
+  ipcMain.handle('chat-truncate', (_e, id: string, index: number) => {
+    const chat = readChat(id);
+    if (!chat) return null;
+    chat.msgs = chat.msgs.slice(0, index);
+    chat.sessionId = '';
+    rewriteChat(chat);
+    return chat;
+  });
+
+  ipcMain.on('win-min', () => win?.minimize());
+  ipcMain.on('win-max', () => {
+    if (!win) return;
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+  });
+
+  ipcMain.handle('win-pin', () => {
+    settings.chatPinned = !settings.chatPinned;
+    saveSettings(settings);
+    win?.setAlwaysOnTop(settings.chatPinned);
+    return settings.chatPinned;
+  });
+
+  ipcMain.on('open-external', (_e, url: string) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
   });
 
   ipcMain.handle('voice-server-up', () => isVoiceServerUp());
@@ -527,7 +836,7 @@ function setupIpc(): void {
   });
 
   ipcMain.on('set-wide', (_e, wide: boolean) => {
-    if (!win || wide === isWide) return;
+    if (!win || wide === isWide || settings.uiMode === 'chat') return;
     const s = uiScale();
     const [x, y] = win.getPosition();
     const delta = Math.round((WIDE_W - WIN_W) * s);
@@ -551,6 +860,9 @@ function setupIpc(): void {
     bumpIdleHide();
   });
 
+  // send, não invoke: switchMode destrói a janela que fez a chamada
+  ipcMain.on('set-ui-mode', (_e, mode: 'overlay' | 'chat') => switchMode(mode));
+
   ipcMain.on('hide-window', () => win?.hide());
   ipcMain.on('quit-app', () => app.quit());
 }
@@ -560,12 +872,13 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    win?.show();
-    win?.focus();
+    showWin();
     bumpIdleHide();
   });
 
   app.whenReady().then(() => {
+    // sem isso o Windows mostra as notificações como "electron.app.Electron" — ou não mostra
+    app.setAppUserModelId('com.macks.hermes-assistente');
     // no macOS, Cmd+V/C/X/A só funcionam com um menu de aplicativo com os papéis de edição
     if (process.platform === 'darwin') {
       Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }]));
@@ -591,16 +904,14 @@ if (!gotLock) {
     else if (!whisperReady()) ensureWhisper(voiceProgress).catch(() => undefined);
     startTunnel(settings);
     bumpIdleHide();
-    startProactive(settings, (text) => {
-      if (win && !win.isVisible() && !hiddenByFullscreen) win.show();
-      bumpIdleHide();
-      win?.webContents.send('proactive', text);
-    });
+    startProactive(settings, onProactive);
     startProbe(({ obs, fs }) => {
       if (obs !== obsActive) {
         obsActive = obs;
         applyScale();
       }
+      // esconder uma janela de chat porque um vídeo entrou em tela cheia seria surpresa ruim
+      if (settings.uiMode === 'chat') return;
       if (fs && win?.isVisible()) {
         win.hide();
         hiddenByFullscreen = true;
@@ -619,5 +930,7 @@ if (!gotLock) {
     stopProbe();
     stopProactive();
   });
-  app.on('window-all-closed', () => app.quit());
+  // app de bandeja: fechar a janela nunca encerra o app (sair só pelo menu do tray).
+  // Também protege a troca de modo, que destrói a janela antes de recriar.
+  app.on('window-all-closed', () => {});
 }

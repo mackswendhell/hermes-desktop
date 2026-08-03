@@ -163,6 +163,12 @@ historyTab.addEventListener('click', async () => {
     openHistory(await window.hermes.getHistory());
   }
 });
+// continuar a leitura na janela de chat
+document.getElementById('to-chat')!.addEventListener('click', (e) => {
+  e.stopPropagation();
+  window.hermes.setUiMode('chat');
+});
+
 typeBox.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     const text = typeBox.value.trim();
