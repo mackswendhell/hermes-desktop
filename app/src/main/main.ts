@@ -81,6 +81,7 @@ function voiceProgress(msg: string): void {
 }
 
 const SIZES: { label: string; id: string; scale: number }[] = [
+  { label: 'Clippy', id: 'clippy', scale: 0.36 },
   { label: 'Pequeno', id: 'pequeno', scale: 0.72 },
   { label: 'Médio', id: 'medio', scale: 1 },
   { label: 'Grande', id: 'grande', scale: 1.25 },
@@ -162,6 +163,10 @@ function showWin(): void {
 function setBadge(on: boolean): void {
   // app.setBadgeCount() é no-op no Windows; o que funciona é o overlay do botão da barra
   tray?.setToolTip(on ? 'Hermes — mensagem nova' : 'Hermes — assistente de voz');
+  if (process.platform === 'darwin') {
+    app.dock?.setBadge(on ? '●' : '');
+    return;
+  }
   if (process.platform !== 'win32' || !win || win.isDestroyed()) return;
   win.setOverlayIcon(
     on ? nativeImage.createFromPath(path.join(__dirname, 'assets', 'badge.png')) : null,

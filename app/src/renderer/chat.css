@@ -59,6 +59,17 @@ button:hover {
   user-select: none;
 }
 
+/* espaço dos semáforos do macOS, que ficam sobre a barra */
+body.mac #title-text {
+  padding-left: 82px;
+}
+
+body.mac #btn-min,
+body.mac #btn-max,
+body.mac #btn-close {
+  display: none;
+}
+
 #title-text {
   padding-left: 12px;
   color: var(--fg-dim);

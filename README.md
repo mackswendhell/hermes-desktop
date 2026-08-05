@@ -76,7 +76,8 @@ o mesmo assistente:
 
 - **Personagem flutuante** — o clipe sobre as janelas, para falar e ouvir.
 - **Janela de chat** — um app de conversa de verdade: janela com barra de título que
-  minimiza para a barra de tarefas, conversas separadas e salvas (cada uma com foto,
+  minimiza para a barra de tarefas (no macOS, com os semáforos de sempre; o vermelho
+  recolhe para a bandeja e o assistente segue vivo), conversas separadas e salvas (cada uma com foto,
   fixar no topo, arquivar, renomear, exportar), busca, markdown com botão de copiar e
   anexos que ele **lê de fato** — PDF, Word, Excel, PowerPoint, imagem e áudio
   (transcrito no seu computador). Dá para gravar um áudio no compositor, pedir para
@@ -94,7 +95,8 @@ agenda, outra para trabalho. A personalidade é escolhida por modo: por padrão 
 ## O que ele faz
 
 Personagem animado que segue seu mouse com os olhos • conversa por voz ou texto •
-personalidades (Cavaleiro épico-cômico ou assistente direto) • 6 cores, 3 tamanhos •
+personalidades (Cavaleiro épico-cômico ou assistente direto) • 6 cores, 4 tamanhos (do
+Clippy miudinho ao grande) •
 conversas salvas, separadas e pesquisáveis • anexos lidos de verdade • avisos proativos do
 seu Hermes (com notificação do sistema no modo chat) • modo reduzido automático com OBS
 aberto e some em tela cheia (Windows) • hibernação da GPU configurável.

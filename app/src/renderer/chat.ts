@@ -54,6 +54,9 @@ function applyTheme(theme: string): void {
 
 /* ---------------- barra de título ---------------- */
 
+// no macOS quem minimiza, maximiza e fecha são os semáforos nativos
+if (navigator.userAgent.includes('Macintosh')) document.body.classList.add('mac');
+
 $('btn-min').addEventListener('click', () => window.hermes.winMin());
 $('btn-max').addEventListener('click', () => window.hermes.winMax());
 $('btn-close').addEventListener('click', () => window.hermes.hideWindow());
