@@ -10,15 +10,22 @@ import { isWin, TAR_EXE } from './platform';
 // no macOS/Linux usa o whisper-cli instalado (ex.: brew install whisper-cpp)
 const WHISPER_ZIP_URL =
   'https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.1/whisper-bin-x64.zip';
-const MODEL_URL =
-  'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin';
+const MODEL_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/';
+
+// 'leve' = o modelo pequeno do motor de voz leve. 'medio' = o mesmo porte de modelo que o
+// voice-server usa (medium), para o STT acelerado por Metal no Mac não perder qualidade.
+const MODELOS = {
+  leve: 'ggml-small-q5_1.bin',
+  medio: 'ggml-medium-q5_0.bin',
+} as const;
+export type ModeloWhisper = keyof typeof MODELOS;
 
 function whisperDir(): string {
   return path.join(app.getPath('userData'), 'whisper');
 }
 
-function modelPath(): string {
-  return path.join(whisperDir(), 'ggml-small-q5_1.bin');
+function modelPath(modelo: ModeloWhisper = 'leve'): string {
+  return path.join(whisperDir(), MODELOS[modelo]);
 }
 
 // apps GUI no macOS não herdam o PATH do shell — checar os locais conhecidos
@@ -41,8 +48,14 @@ function findExe(): string | null {
   return null;
 }
 
-export function whisperReady(): boolean {
-  return findExe() !== null && existsSync(modelPath());
+export function whisperReady(modelo: ModeloWhisper = 'leve'): boolean {
+  return findExe() !== null && existsSync(modelPath(modelo));
+}
+
+/** STT local acelerado: no Apple Silicon o whisper.cpp roda o medium na GPU (Metal) e faz
+ *  em ~1/3 do tempo do faster-whisper em CPU. Onde há CUDA o voice-server já é rápido. */
+export function fastSttReady(): boolean {
+  return process.platform === 'darwin' && whisperReady('medio');
 }
 
 // no Windows o binário é baixado sob demanda; fora, depende do whisper-cli instalado
@@ -69,13 +82,17 @@ async function download(url: string, dest: string, onProgress: (pct: number) => 
   await new Promise<void>((resolve) => out.end(resolve));
 }
 
-let installing: Promise<void> | null = null;
+const installing = new Map<ModeloWhisper, Promise<void>>();
 
-export function ensureWhisper(onProgress: (msg: string) => void): Promise<void> {
-  if (whisperReady()) return Promise.resolve();
-  if (installing) return installing;
+export function ensureWhisper(
+  onProgress: (msg: string) => void,
+  modelo: ModeloWhisper = 'leve',
+): Promise<void> {
+  if (whisperReady(modelo)) return Promise.resolve();
+  const emCurso = installing.get(modelo);
+  if (emCurso) return emCurso;
 
-  installing = (async () => {
+  const tarefa = (async () => {
     const dir = whisperDir();
     mkdirSync(dir, { recursive: true });
 
@@ -91,26 +108,29 @@ export function ensureWhisper(onProgress: (msg: string) => void): Promise<void> 
       unlinkSync(zip);
     }
 
-    if (!existsSync(modelPath())) {
+    if (!existsSync(modelPath(modelo))) {
       onProgress('baixando modelo de audição…');
-      await download(MODEL_URL, modelPath(), (p) => onProgress(`baixando modelo… ${p}%`));
+      await download(MODEL_BASE + MODELOS[modelo], modelPath(modelo), (p) =>
+        onProgress(`baixando modelo… ${p}%`),
+      );
     }
     onProgress('');
-    log('[whisper] voz leve instalada');
-  })().finally(() => (installing = null));
+    log(`[whisper] modelo ${modelo} instalado`);
+  })().finally(() => installing.delete(modelo));
 
-  return installing;
+  installing.set(modelo, tarefa);
+  return tarefa;
 }
 
-export async function transcribeLocal(wav: Buffer): Promise<string> {
+export async function transcribeLocal(wav: Buffer, modelo: ModeloWhisper = 'leve'): Promise<string> {
   const exe = findExe();
-  if (!exe || !existsSync(modelPath())) throw new Error('voz leve ainda não instalada');
+  if (!exe || !existsSync(modelPath(modelo))) throw new Error('voz leve ainda não instalada');
 
   const tmp = path.join(os.tmpdir(), `hermes-stt-${Date.now()}.wav`);
   writeFileSync(tmp, wav);
   try {
     return await new Promise<string>((resolve, reject) => {
-      const proc = spawn(exe, ['-m', modelPath(), '-f', tmp, '-l', 'pt', '-nt', '-np'], {
+      const proc = spawn(exe, ['-m', modelPath(modelo), '-f', tmp, '-l', 'pt', '-nt', '-np'], {
         windowsHide: true,
       });
       let out = '';

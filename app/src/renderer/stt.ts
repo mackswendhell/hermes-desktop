@@ -12,6 +12,14 @@ export async function transcribe(
 ): Promise<string> {
   const engine = settings.voiceEngine ?? 'xtts';
   if (engine === 'xtts') {
+    // no Mac o whisper.cpp roda o mesmo porte de modelo na GPU; erro aqui cai no voice-server
+    if (await window.hermes.sttFastReady()) {
+      try {
+        return await window.hermes.sttLocal(await blobToWav16k(blob), 'medio');
+      } catch {
+        // segue para o voice-server
+      }
+    }
     const form = new FormData();
     form.append('audio', blob, filename);
     const sttRes = await fetch(`${VOICE_URL}/stt`, { method: 'POST', body: form });

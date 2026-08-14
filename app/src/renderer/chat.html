@@ -34,6 +34,7 @@
       <header id="conv-header">
         <button id="conv-avatar" class="avatar" title="Trocar a foto da conversa"></button>
         <span id="conv-title">Nova conversa</span>
+        <button id="btn-find" title="Buscar nas mensagens (Cmd+K)">⌕</button>
       </header>
 
       <div id="messages"></div>
@@ -46,8 +47,7 @@
           </div>
           <button id="btn-attach" title="Anexar arquivo">📎</button>
           <textarea id="input" rows="1" placeholder="Escreva para o Hermes… (Enter envia, Shift+Enter quebra linha)" spellcheck="false"></textarea>
-          <button id="btn-send" title="Enviar" class="hidden">➤</button>
-          <button id="btn-mic" title="Gravar um áudio">🎤</button>
+          <button id="btn-send" title="Enviar">➤</button>
         </div>
         <div id="composer-status"></div>
         <input id="attach-input" type="file" multiple class="hidden" />
@@ -66,6 +66,11 @@
         <button value="ok">Salvar</button>
       </menu>
     </form>
+  </dialog>
+
+  <dialog id="find-dlg">
+    <input id="find-input" type="search" placeholder="Buscar nas mensagens…" autocomplete="off" spellcheck="false" />
+    <div id="find-hits"></div>
   </dialog>
 
   <div id="drop-veil" class="hidden">solte os arquivos aqui</div>

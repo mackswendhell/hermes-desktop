@@ -517,6 +517,15 @@ body {
   transform: translateY(-5px);
 }
 
+/* ---------- tamanho Clippy: só o clipe, do tamanho de um ícone ----------
+   A cor continua vindo do tema. Nesse tamanho nenhum texto é legível, então
+   balão, fala e status somem — o Clippy é só voz. */
+#stage.clippy #bubble,
+#stage.clippy #speech,
+#stage.clippy #status-label {
+  display: none;
+}
+
 #stage.hover .eye-white {
   transform: scale(1.05);
   transition: transform 0.16s ease-out;

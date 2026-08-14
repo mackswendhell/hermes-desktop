@@ -31,7 +31,9 @@ contextBridge.exposeInMainWorld('hermes', {
   testBridge: () => ipcRenderer.invoke('test-bridge'),
   vpsSetup: () => ipcRenderer.invoke('vps-setup'),
   getHistory: () => ipcRenderer.invoke('history-get'),
-  sttLocal: (wav: ArrayBuffer) => ipcRenderer.invoke('stt-local', wav),
+  sttLocal: (wav: ArrayBuffer, modelo?: 'leve' | 'medio') =>
+    ipcRenderer.invoke('stt-local', wav, modelo),
+  sttFastReady: () => ipcRenderer.invoke('stt-fast-ready'),
   ttsNuvem: (text: string) => ipcRenderer.invoke('tts-nuvem', text),
   setWindowsVoices: (names: string[]) => ipcRenderer.send('windows-voices', names),
   onVoiceProgress: (cb: (msg: string) => void) => {
@@ -40,6 +42,7 @@ contextBridge.exposeInMainWorld('hermes', {
   askHermes: (text: string, attachments?: unknown[]) =>
     ipcRenderer.invoke('ask-hermes', text, attachments),
   voiceServerUp: () => ipcRenderer.invoke('voice-server-up'),
+  voiceWarm: (what: 'stt' | 'tts') => ipcRenderer.send('voice-warm', what),
   openMenu: () => ipcRenderer.send('open-menu'),
   setWide: (wide: boolean) => ipcRenderer.send('set-wide', wide),
   hideWindow: () => ipcRenderer.send('hide-window'),

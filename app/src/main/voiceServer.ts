@@ -34,6 +34,14 @@ export function hasVoiceServerVenv(): boolean {
   return existsSync(venvPython());
 }
 
+/** manda carregar um modelo sem esperar: o custo some atrás da fala e do Hermes */
+export function warmVoice(what: 'stt' | 'tts' | 'all' = 'all'): void {
+  fetch(`${VOICE_URL}/warmup?what=${what}`, {
+    method: 'POST',
+    signal: AbortSignal.timeout(300_000),
+  }).catch(() => undefined);
+}
+
 export async function isVoiceServerUp(): Promise<boolean> {
   try {
     const res = await fetch(`${VOICE_URL}/health`, { signal: AbortSignal.timeout(1500) });
@@ -79,7 +87,7 @@ export async function startVoiceServer(): Promise<void> {
 
   // aquece os modelos em background sem bloquear a inicialização
   waitUntilUp(120_000).then((up) => {
-    if (up) fetch(`${VOICE_URL}/warmup`, { method: 'POST' }).catch(() => undefined);
+    if (up) warmVoice();
   });
 }
 

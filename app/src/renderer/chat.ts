@@ -3,7 +3,7 @@ import { renderMarkdown, copyInto } from './markdown';
 import { transcribe } from './stt';
 import { pdfToText } from './pdfText';
 import { speak, stopSpeaking, isSpeaking } from './tts';
-import type { Chat, ChatAttachment, ChatMsg, ChatSummary, RendererSettings } from './types.d';
+import type { Chat, ChatAttachment, ChatMsg, ChatSummary, RendererSettings, SearchHit } from './types.d';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -20,10 +20,12 @@ const convAvatar = $('conv-avatar');
 const ctxMenu = $('ctx-menu');
 const stage = $('stage');
 const veil = $('drop-veil');
-const btnSend = $('btn-send');
-const btnMic = $('btn-mic');
+const btnSend = $<HTMLButtonElement>('btn-send');
 const askDlg = $<HTMLDialogElement>('ask-dlg');
 const askInput = $<HTMLInputElement>('ask-input');
+const findDlg = $<HTMLDialogElement>('find-dlg');
+const findInput = $<HTMLInputElement>('find-input');
+const findHits = $('find-hits');
 
 const VISIBLE_MSGS = 200;
 const MAX_FILE_BYTES = 20_000_000;
@@ -310,26 +312,132 @@ async function runSearch(): Promise<void> {
   label.className = 'side-label';
   label.textContent = hits.length ? `${hits.length} resultado(s)` : 'nada encontrado';
   listEl.appendChild(label);
-  for (const h of hits) {
-    const el = document.createElement('div');
-    el.className = 'chat-item';
-    el.appendChild(avatarNode({ avatar: '', title: h.title }));
-    const texto = document.createElement('div');
-    texto.className = 'texto';
-    const t = document.createElement('div');
-    t.className = 't';
-    const nome = document.createElement('span');
-    nome.textContent = h.title;
-    t.appendChild(nome);
-    const p = document.createElement('div');
-    p.className = 'p';
-    p.textContent = h.snippet;
-    texto.append(t, p);
-    el.appendChild(texto);
-    el.addEventListener('click', () => openChat(h.chatId, h.index));
-    listEl.appendChild(el);
-  }
+  for (const h of hits) listEl.appendChild(hitNode(h, q));
 }
+
+// sem acento e sem caixa, como a busca do main, para o destaque cair no lugar certo
+const semAcento = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+
+// o trecho com o termo em destaque; nós de DOM, nunca innerHTML com texto do modelo
+function trechoNode(snippet: string, termo: string): HTMLElement {
+  const p = document.createElement('div');
+  p.className = 'p';
+  let texto = snippet;
+  let at = termo ? semAcento(texto).indexOf(semAcento(termo)) : -1;
+  if (at < 0) {
+    p.textContent = texto;
+    return p;
+  }
+  // a linha é única e corta com reticências: o termo tem que caber nela
+  if (at > 24) {
+    texto = `…${texto.slice(at - 24)}`;
+    at = 25;
+  }
+  const marca = document.createElement('mark');
+  marca.textContent = texto.slice(at, at + termo.length);
+  p.append(texto.slice(0, at), marca, texto.slice(at + termo.length));
+  return p;
+}
+
+function quando(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const hoje = new Date();
+  const mesmoDia = d.toDateString() === hoje.toDateString();
+  return mesmoDia
+    ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function hitNode(h: SearchHit, termo = ''): HTMLElement {
+  const el = document.createElement('div');
+  el.className = 'chat-item';
+  el.appendChild(avatarNode({ avatar: h.avatar, title: h.title }));
+  const texto = document.createElement('div');
+  texto.className = 'texto';
+  const t = document.createElement('div');
+  t.className = 't';
+  const nome = document.createElement('span');
+  nome.textContent = h.title;
+  const data = document.createElement('span');
+  data.className = 'quando';
+  data.textContent = quando(h.t);
+  t.append(nome, data);
+  texto.append(t, trechoNode(h.snippet, termo));
+  el.appendChild(texto);
+  el.addEventListener('click', () => openChat(h.chatId, h.index));
+  return el;
+}
+
+/* busca nas mensagens: a barra da sidebar some abaixo de 900px, então a lupa do
+   cabeçalho e o Cmd+K abrem esta paleta, que fala com a mesma chatSearch */
+
+let findTimer: ReturnType<typeof setTimeout> | undefined;
+let findSel = -1;
+
+function findItens(): HTMLElement[] {
+  return Array.from(findHits.querySelectorAll<HTMLElement>('.chat-item'));
+}
+
+function marcarSel(i: number): void {
+  const itens = findItens();
+  if (!itens.length) return;
+  findSel = (i + itens.length) % itens.length;
+  itens.forEach((el, n) => el.classList.toggle('sel', n === findSel));
+  itens[findSel].scrollIntoView({ block: 'nearest' });
+}
+
+async function runFind(): Promise<void> {
+  const q = findInput.value.trim();
+  findHits.textContent = '';
+  findSel = -1;
+  if (!q) return;
+  const hits = await window.hermes.chatSearch(q);
+  const label = document.createElement('div');
+  label.className = 'side-label';
+  label.textContent = hits.length ? `${hits.length} resultado(s)` : 'nada encontrado';
+  findHits.appendChild(label);
+  for (const h of hits) {
+    const el = hitNode(h, q);
+    el.addEventListener('click', () => findDlg.close());
+    findHits.appendChild(el);
+  }
+  marcarSel(0);
+}
+
+function abrirBusca(): void {
+  if (findDlg.open) return;
+  findDlg.showModal();
+  findInput.select();
+}
+
+$('btn-find').addEventListener('click', abrirBusca);
+
+findInput.addEventListener('input', () => {
+  clearTimeout(findTimer);
+  findTimer = setTimeout(runFind, 200);
+});
+
+findInput.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    marcarSel(findSel + (e.key === 'ArrowDown' ? 1 : -1));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    findItens()[findSel]?.click();
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    abrirBusca();
+  }
+});
 
 /* ---------------- abrir conversa ---------------- */
 
@@ -342,7 +450,11 @@ async function openChat(id: string, focusIndex?: number): Promise<void> {
   showFrom = focusIndex !== undefined ? 0 : Math.max(0, loaded.msgs.length - VISIBLE_MSGS);
   renderMessages();
   if (focusIndex !== undefined) {
-    msgsEl.querySelector(`[data-i="${focusIndex}"]`)?.scrollIntoView({ block: 'center' });
+    const alvo = msgsEl.querySelector(`[data-i="${focusIndex}"]`);
+    alvo?.scrollIntoView({ block: 'center' });
+    // como no WhatsApp: a mensagem pisca para os olhos acharem onde caíram
+    alvo?.classList.add('flash');
+    setTimeout(() => alvo?.classList.remove('flash'), 1600);
   }
   refreshList();
 }
@@ -599,12 +711,8 @@ window.hermes.onHermesDelta((reqId, delta) => {
 function autoGrow(): void {
   inputEl.style.height = 'auto';
   inputEl.style.height = `${Math.min(inputEl.scrollHeight, 220)}px`;
-  // como no WhatsApp: campo vazio mostra o microfone, com texto mostra o enviar.
-  // Gravando, o microfone vira o botão de parar e fica no lugar de qualquer jeito.
-  const gravando = Boolean(recorder);
-  const temTexto = Boolean(inputEl.value.trim() || attachments.length);
-  btnSend.classList.toggle('hidden', gravando || !temTexto);
-  btnMic.classList.toggle('hidden', !gravando && temTexto);
+  // o botão de enviar fica sempre visível; send() ignora o clique com o campo vazio
+  btnSend.disabled = !inputEl.value.trim() && !attachments.length;
 }
 
 inputEl.addEventListener('input', () => {
@@ -642,6 +750,15 @@ document.addEventListener('drop', async (e) => {
   e.preventDefault();
   veil.classList.add('hidden');
   await addFiles(Array.from(e.dataTransfer?.files ?? []));
+});
+
+// ponytail: copiar seleção sempre como texto puro — o text/html do Chromium leva
+// junto o fundo escuro do balão e suja o destino da colagem.
+document.addEventListener('copy', (e) => {
+  const sel = document.getSelection()?.toString();
+  if (!sel) return;
+  e.preventDefault();
+  e.clipboardData?.setData('text/plain', sel);
 });
 
 inputEl.addEventListener('paste', async (e) => {
@@ -769,93 +886,6 @@ function renderAttachments(): void {
   });
   autoGrow();
 }
-
-/* ---------------- áudio: grava e manda, como no WhatsApp ---------------- */
-
-let recorder: MediaRecorder | null = null;
-let recChunks: Blob[] = [];
-let recTimer: ReturnType<typeof setInterval> | undefined;
-let recInicio = 0;
-let recCancelado = false;
-
-const timerEl = document.createElement('span');
-timerEl.id = 'rec-timer';
-
-function mmss(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-async function toggleMic(): Promise<void> {
-  if (recorder) {
-    recorder.stop();
-    return;
-  }
-  let stream: MediaStream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch {
-    status('sem acesso ao microfone');
-    return;
-  }
-  recChunks = [];
-  recCancelado = false;
-  recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-  recorder.ondataavailable = (e) => e.data.size && recChunks.push(e.data);
-  recorder.onstop = async () => {
-    stream.getTracks().forEach((t) => t.stop());
-    recorder = null;
-    clearInterval(recTimer);
-    const duracao = Date.now() - recInicio;
-    timerEl.remove();
-    btnMic.classList.remove('on');
-    btnMic.textContent = '🎤';
-    autoGrow();
-    if (recCancelado) {
-      status('gravação descartada');
-      return;
-    }
-
-    const blob = new Blob(recChunks, { type: 'audio/webm' });
-    setState('thinking');
-    status('transcrevendo o áudio…');
-    try {
-      const texto = (await transcribeFile(blob, 'audio.webm')).trim();
-      if (!texto) {
-        status('não entendi nada no áudio');
-        setState('idle');
-        return;
-      }
-      const file = await window.hermes.mediaSave(await blob.arrayBuffer(), 'webm');
-      status('');
-      await send(texto, 'normal', { file, name: `Áudio ${mmss(duracao)}` });
-    } catch (e) {
-      status(e instanceof Error ? e.message : String(e));
-      setState('idle');
-    }
-  };
-
-  recorder.start();
-  recInicio = Date.now();
-  btnMic.classList.add('on');
-  btnMic.textContent = '⏹';
-  btnMic.title = 'Parar e enviar (Esc descarta)';
-  autoGrow();
-  btnMic.parentElement!.insertBefore(timerEl, btnMic);
-  timerEl.textContent = '0:00';
-  recTimer = setInterval(() => (timerEl.textContent = mmss(Date.now() - recInicio)), 250);
-  setState('listening');
-  status('gravando — clique de novo para enviar');
-}
-
-btnMic.addEventListener('click', toggleMic);
-window.hermes.onPttToggle(() => toggleMic());
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && recorder) {
-    recCancelado = true;
-    recorder.stop();
-  }
-});
 
 /* ---------------- personagem ---------------- */
 

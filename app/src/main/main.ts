@@ -22,8 +22,16 @@ import {
   setVoiceServerDir,
   setVoiceIdleMinutes,
   hasVoiceServerVenv,
+  warmVoice,
 } from './voiceServer';
-import { ensureWhisper, transcribeLocal, whisperReady, whisperAvailable } from './whisperLocal';
+import {
+  ensureWhisper,
+  transcribeLocal,
+  whisperReady,
+  whisperAvailable,
+  fastSttReady,
+  type ModeloWhisper,
+} from './whisperLocal';
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import { askHermes, testBridge, ChatAttachment } from './hermes';
 import { createChatWindow } from './chatWindow';
@@ -45,7 +53,7 @@ import {
   ChatMsg,
   Chat,
 } from './chatStore';
-import { chatSystemPrompt } from './hermes';
+import { chatSystemPrompt, splitReply } from './hermes';
 import { extractFile } from './extract';
 import { startTunnel, stopTunnel } from './tunnel';
 import { openSettingsWindow } from './settingsWindow';
@@ -81,10 +89,12 @@ function voiceProgress(msg: string): void {
 }
 
 const SIZES: { label: string; id: string; scale: number }[] = [
-  { label: 'Clippy', id: 'clippy', scale: 0.36 },
   { label: 'Pequeno', id: 'pequeno', scale: 0.72 },
   { label: 'Médio', id: 'medio', scale: 1 },
   { label: 'Grande', id: 'grande', scale: 1.25 },
+  // ponytail: um terço do pequeno seria 0.24, mas 0.25 é o piso do zoom do Chromium —
+  // abaixo disso a janela encolheria e o conteúdo não, cortando o personagem.
+  { label: 'Clippy', id: 'clippy', scale: 0.25 },
 ];
 
 function uiScale(): number {
@@ -128,6 +138,10 @@ function createWindow(): void {
   });
   win.on('focus', () => setBadge(false));
   win.on('closed', () => (win = null));
+  // o rastreio do cursor vive junto com a janela: some quando ela se recolhe
+  win.on('show', startCursorTracking);
+  win.on('hide', stopCursorTracking);
+  startCursorTracking();
 }
 
 function saveChatBounds(b: { x: number; y: number; width: number; height: number }): void {
@@ -290,6 +304,20 @@ function notifySettingsChanged(): void {
 // (segue ativo — os modelos de voz hibernam por conta própria no server.py)
 let idleHideTimer: ReturnType<typeof setTimeout> | undefined;
 
+// No Mac o whisper.cpp usa a GPU e faz o mesmo porte de modelo em ~1/3 do tempo do
+// faster-whisper em CPU. Enquanto o modelo não está no disco a resposta é não, e o
+// voice-server atende — com `baixar`, pede o download para as próximas vezes.
+function sttRapidoAtivo(opts: { baixar?: boolean } = {}): boolean {
+  if (settings.voiceEngine !== 'xtts' || process.platform !== 'darwin' || !whisperAvailable()) {
+    return false;
+  }
+  if (!fastSttReady()) {
+    if (opts.baixar) ensureWhisper(voiceProgress, 'medio').catch((e) => log(`[whisper] medium: ${e.message}`));
+    return false;
+  }
+  return true;
+}
+
 function bumpIdleHide(): void {
   clearTimeout(idleHideTimer);
   // no modo chat a janela nunca se recolhe sozinha (a VRAM hiberna pelo server.py de qualquer jeito)
@@ -324,6 +352,7 @@ function buildMenu(): Menu {
                 saveSettings(settings);
                 refreshTrayMenu();
                 applyScale();
+                notifySettingsChanged(); // o tamanho Clippy também troca a aparência
               },
             })),
           },
@@ -364,10 +393,15 @@ function buildMenu(): Menu {
           click: () => switchMode(m.id),
         })),
       },
-      {
-        label: `Falar (${settings.hotkey.replace('Control', 'Ctrl')})`,
-        click: () => win?.webContents.send('ptt-toggle'),
-      },
+      // no modo chat não há gravação: o atalho só traz a janela para a frente
+      ...(settings.uiMode === 'chat'
+        ? []
+        : [
+            {
+              label: `Falar (${settings.hotkey.replace('Control', 'Ctrl')})`,
+              click: () => win?.webContents.send('ptt-toggle'),
+            },
+          ]),
       {
         label: 'Voz',
         submenu: [
@@ -508,10 +542,16 @@ const EYES_X = 130;
 const EYES_Y = 174;
 let lastCursor = { x: -1, y: -1 };
 
+let cursorTimer: ReturnType<typeof setInterval> | undefined;
+
+// no modo chat os olhos seguem o mousemove do DOM e com o personagem recolhido não há
+// olhos para mover: nos dois casos o timer nem é armado — 25 acordadas por segundo à toa
+// são das coisas que mais custam bateria num portátil
 function startCursorTracking(): void {
-  setInterval(() => {
-    // no modo chat os olhos seguem o mousemove do DOM, dentro da janela
-    if (!win || !win.isVisible() || settings.uiMode === 'chat') return;
+  stopCursorTracking();
+  if (!win || settings.uiMode === 'chat' || !win.isVisible()) return;
+  cursorTimer = setInterval(() => {
+    if (!win || !win.isVisible()) return;
     const c = screen.getCursorScreenPoint();
     if (Math.abs(c.x - lastCursor.x) < 2 && Math.abs(c.y - lastCursor.y) < 2) return;
     lastCursor = c;
@@ -520,6 +560,11 @@ function startCursorTracking(): void {
     const eyesX = (isWide && settings.speechSide === 'left' ? EYES_X + (WIDE_W - WIN_W) : EYES_X) * s;
     win.webContents.send('cursor-move', c.x - (wx + eyesX), c.y - (wy + EYES_Y * s));
   }, 40);
+}
+
+function stopCursorTracking(): void {
+  clearInterval(cursorTimer);
+  cursorTimer = undefined;
 }
 
 function registerHotkey(): void {
@@ -764,14 +809,15 @@ function setupIpc(): void {
         inFlight.delete(req.reqId);
       }
 
+      const partes = splitReply(reply);
       if (req.mode === 'regen') {
         const atual = readChat(req.chatId)!;
-        const last = atual.msgs[atual.msgs.length - 1];
-        if (last?.role === 'assistant') atual.msgs.pop();
-        atual.msgs.push({ type: 'msg', role: 'assistant', t: now(), text: reply });
+        // uma resposta pode ocupar mais de uma mensagem: tira todas as do turno anterior
+        while (atual.msgs[atual.msgs.length - 1]?.role === 'assistant') atual.msgs.pop();
+        for (const p of partes) atual.msgs.push({ type: 'msg', role: 'assistant', t: now(), text: p });
         rewriteChat(atual);
       } else {
-        appendMsg(req.chatId, { type: 'msg', role: 'assistant', t: now(), text: reply });
+        for (const p of partes) appendMsg(req.chatId, { type: 'msg', role: 'assistant', t: now(), text: p });
       }
       const title = ensureTitle(req.chatId);
       return { reply, title };
@@ -809,25 +855,55 @@ function setupIpc(): void {
 
   ipcMain.handle('voice-server-up', () => isVoiceServerUp());
 
-  ipcMain.handle('stt-local', async (_e, buf: ArrayBuffer) => {
-    bumpIdleHide();
-    if (!whisperReady()) await ensureWhisper(voiceProgress);
-    return transcribeLocal(Buffer.from(buf));
+  // só o motor local usa o voice-server; nos outros o aquecimento seria carga à toa,
+  // e com o STT acelerado ligado o whisper de lá também não é usado
+  ipcMain.on('voice-warm', (_e, what: 'stt' | 'tts') => {
+    if (settings.voiceEngine !== 'xtts') return;
+    if (what === 'stt' && sttRapidoAtivo()) return;
+    warmVoice(what);
   });
 
+  ipcMain.handle('stt-local', async (_e, buf: ArrayBuffer, modelo: ModeloWhisper = 'leve') => {
+    bumpIdleHide();
+    if (!whisperReady(modelo)) await ensureWhisper(voiceProgress, modelo);
+    return transcribeLocal(Buffer.from(buf), modelo);
+  });
+
+  ipcMain.handle('stt-fast-ready', () => sttRapidoAtivo({ baixar: true }));
+
+  // Uma conexão só: cada `new MsEdgeTTS()` abria um websocket novo com a Microsoft por
+  // trecho de fala. A lib multiplexa por requestId e o setMetadata reconecta sozinho —
+  // se ainda assim falhar, joga a instância fora e tenta uma vez com uma nova.
+  let edgeTts: MsEdgeTTS | null = null;
+  let edgeVoz = '';
+
+  async function edgeAudio(text: string): Promise<ArrayBuffer> {
+    // setMetadata só na primeira vez ou ao trocar de voz: chamado duas vezes sem o 3º
+    // argumento, o msedge-tts estoura em `metadataOptions.voiceLocale`. Conexão caída
+    // se refaz sozinha no envio (_sendMessage tenta reabrir).
+    if (!edgeTts || edgeVoz !== settings.edgeVoice) {
+      edgeTts?.close();
+      edgeTts = new MsEdgeTTS();
+      await edgeTts.setMetadata(settings.edgeVoice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+      edgeVoz = settings.edgeVoice;
+    }
+    // o texto entra num template SSML sem escape — proteger o XML
+    const safe = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const { audioStream } = edgeTts.toStream(safe);
+    const chunks: Buffer[] = [];
+    for await (const chunk of audioStream) chunks.push(chunk as Buffer);
+    const buf = Buffer.concat(chunks);
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  }
+
   ipcMain.handle('tts-nuvem', async (_e, text: string) => {
-    const tts = new MsEdgeTTS();
-    await tts.setMetadata(settings.edgeVoice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
     try {
-      // o texto entra num template SSML sem escape — proteger o XML
-      const safe = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const { audioStream } = tts.toStream(safe);
-      const chunks: Buffer[] = [];
-      for await (const chunk of audioStream) chunks.push(chunk as Buffer);
-      const buf = Buffer.concat(chunks);
-      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-    } finally {
-      tts.close();
+      return await edgeAudio(text);
+    } catch (err) {
+      log(`[edge] conexão reciclada: ${err instanceof Error ? err.message : String(err)}`);
+      edgeTts = null;
+      edgeVoz = '';
+      return edgeAudio(text);
     }
   });
 
@@ -841,6 +917,10 @@ function setupIpc(): void {
   });
 
   ipcMain.on('set-wide', (_e, wide: boolean) => {
+    // balão ou histórico abertos são interação em curso: o timer de ocioso é armado
+    // na pergunta e estourava no meio da resposta, recolhendo o personagem enquanto ele falava
+    if (wide) clearTimeout(idleHideTimer);
+    else bumpIdleHide();
     if (!win || wide === isWide || settings.uiMode === 'chat') return;
     const s = uiScale();
     const [x, y] = win.getPosition();
@@ -884,9 +964,19 @@ if (!gotLock) {
   app.whenReady().then(() => {
     // sem isso o Windows mostra as notificações como "electron.app.Electron" — ou não mostra
     app.setAppUserModelId('com.macks.hermes-assistente');
-    // no macOS, Cmd+V/C/X/A só funcionam com um menu de aplicativo com os papéis de edição
+    // no macOS, Cmd+V/C/X/A só funcionam com um menu de aplicativo com os papéis de edição.
+    // O 'appMenu' pronto traz o item Ocultar (Cmd+H), que rouba o atalho de quem escolhe
+    // Command+H para falar: a janela some logo depois de aparecer. Daí o menu à mão, sem ele.
     if (process.platform === 'darwin') {
-      Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }]));
+      Menu.setApplicationMenu(
+        Menu.buildFromTemplate([
+          {
+            label: app.name,
+            submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }],
+          },
+          { role: 'editMenu' },
+        ]),
+      );
     }
     settings = loadSettings();
     setVoiceServerDir(settings.voiceServerDir);
@@ -904,7 +994,6 @@ if (!gotLock) {
     // primeiro uso: sem VPS configurada, abre direto as Configurações
     if (!settings.vpsHost && !settings.bridgeUrl) openSettingsWindow();
     applyAutoStart();
-    startCursorTracking();
     if (settings.voiceEngine === 'xtts') startVoiceServer();
     else if (!whisperReady()) ensureWhisper(voiceProgress).catch(() => undefined);
     startTunnel(settings);

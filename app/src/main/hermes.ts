@@ -12,11 +12,27 @@ const VOICE_RULES =
   '(um personagem no desktop). Responda em português brasileiro, de forma curta e conversacional — ' +
   'a resposta será lida em voz alta. Evite listas, código e formatação; fale como numa conversa.';
 
+// uma requisição devolve um texto só; o app é que corta em duas mensagens neste marcador
+export const SPLIT_MARK = '===RESPOSTA===';
+const SPLIT_RE = new RegExp(`^[ \\t]*${SPLIT_MARK}[ \\t]*$`, 'm');
+
+/** parte a resposta no marcador; sem marcador (ou sobrando pedaço vazio) devolve uma parte só */
+export function splitReply(text: string): string[] {
+  if (!SPLIT_RE.test(text)) return [text.trim()];
+  const partes = text.split(SPLIT_RE).map((p) => p.trim()).filter(Boolean);
+  return partes.length ? partes : [text.trim()];
+}
+
 const CHAT_RULES =
   'Você conversa por texto numa janela de chat no computador do dono. Responda em português ' +
   'brasileiro. Use markdown quando ajudar: listas, títulos, blocos de código com a linguagem ' +
   'indicada. Entregue o texto completo que a tarefa pedir — um e-mail inteiro, um arquivo ' +
-  'inteiro de código — sem resumir por educação nem pedir permissão para continuar.';
+  'inteiro de código — sem resumir por educação nem pedir permissão para continuar.\n\n' +
+  `Quando o pedido for produzir um texto para o dono copiar e usar em outro lugar (um e-mail, ` +
+  `uma mensagem, um post), escreva primeiro o seu comentário e o contexto, depois uma linha ` +
+  `contendo apenas ${SPLIT_MARK} e, abaixo dela, só o texto final, sem nenhum comentário seu — ` +
+  `o app transforma cada parte numa mensagem separada, para o dono copiar a segunda limpa. ` +
+  `Nas demais respostas não use esse marcador, e nunca use mais de um por resposta.`;
 
 const CAVALEIRO_CORPO = `Encarne esta persona apenas no tom de fala — o conteúdo continua útil, correto e direto; o personagem é a embalagem, nunca um obstáculo.
 

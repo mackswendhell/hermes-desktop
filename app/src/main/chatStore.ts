@@ -266,10 +266,12 @@ function norm(s: string): string {
     .toLowerCase();
 }
 
-export function searchChats(q: string): { chatId: string; title: string; t: string; snippet: string; index: number }[] {
+type Hit = { chatId: string; title: string; avatar: string; t: string; snippet: string; index: number };
+
+export function searchChats(q: string): Hit[] {
   const needle = norm(q.trim());
   if (!needle) return [];
-  const hits: { chatId: string; title: string; t: string; snippet: string; index: number }[] = [];
+  const hits: Hit[] = [];
   for (const file of readdirSync(chatsDir())) {
     if (!file.endsWith('.jsonl')) continue;
     const chat = readChat(file.slice(0, -6));
@@ -282,6 +284,7 @@ export function searchChats(q: string): { chatId: string; title: string; t: stri
       hits.push({
         chatId: chat.id,
         title,
+        avatar: chat.avatar,
         t: m.t,
         index,
         snippet: m.text.slice(Math.max(0, at - 60), at + needle.length + 60).replace(/\s+/g, ' '),

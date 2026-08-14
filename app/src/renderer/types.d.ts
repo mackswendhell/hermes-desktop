@@ -62,6 +62,7 @@ export interface ChatSummary {
 export interface SearchHit {
   chatId: string;
   title: string;
+  avatar: string;
   t: string;
   snippet: string;
   index: number;
@@ -94,12 +95,16 @@ export interface HermesBridge {
   testBridge(): Promise<{ ok: boolean; message: string }>;
   vpsSetup(): Promise<{ ok: boolean; message: string }>;
   getHistory(): Promise<HistoryEntry[]>;
-  sttLocal(wav: ArrayBuffer): Promise<string>;
+  sttLocal(wav: ArrayBuffer, modelo?: 'leve' | 'medio'): Promise<string>;
+  /** true quando o STT local acelerado (whisper.cpp na GPU) está pronto para o motor local */
+  sttFastReady(): Promise<boolean>;
   ttsNuvem(text: string): Promise<ArrayBuffer>;
   setWindowsVoices(names: string[]): void;
   onVoiceProgress(cb: (msg: string) => void): void;
   askHermes(text: string, attachments?: ChatAttachment[]): Promise<string>;
   voiceServerUp(): Promise<boolean>;
+  /** carrega o modelo de voz antes de precisar dele (os modelos hibernam) */
+  voiceWarm(what: 'stt' | 'tts'): void;
   openMenu(): void;
   setWide(wide: boolean): void;
   hideWindow(): void;

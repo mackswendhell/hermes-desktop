@@ -6,6 +6,14 @@ export type CharState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
 const slot = document.getElementById('char-slot');
 if (slot) slot.innerHTML = charSvg;
 
+// o personagem respira, pisca e gira em animações infinitas. Com a janela recolhida ou
+// minimizada ninguém vê e elas seguem acordando o compositor: fora da tela, tudo pausa.
+const pausarSeOculto = (): void => {
+  document.documentElement.classList.toggle('parado', document.hidden);
+};
+document.addEventListener('visibilitychange', pausarSeOculto);
+pausarSeOculto();
+
 // balões, histórico e status só existem no overlay — no chat estes ids não vêm
 const $ = (id: string) => document.getElementById(id);
 const stage = document.getElementById('stage')!;

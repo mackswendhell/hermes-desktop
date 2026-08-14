@@ -73,3 +73,10 @@
 .lid {
   fill: var(--c2);
 }
+
+/* janela oculta: nada de animação rodando para ninguém ver (bateria) */
+:root.parado *,
+:root.parado *::before,
+:root.parado *::after {
+  animation-play-state: paused !important;
+}

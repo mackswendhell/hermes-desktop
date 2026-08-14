@@ -54,6 +54,9 @@ export async function startListening(): Promise<void> {
     return;
   }
 
+  // os modelos de voz hibernam; carregar o de audição agora esconde a espera atrás da fala
+  window.hermes.voiceWarm('stt');
+
   chunks = [];
   recorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm;codecs=opus' });
   recorder.ondataavailable = (e) => {
@@ -156,6 +159,8 @@ function errorMessage(err: unknown): string {
 async function processUtterance(blob: Blob): Promise<void> {
   const settings = await window.hermes.getSettings();
   const text = await transcribe(blob, settings);
+  // a resposta vai ser falada: o modelo de fala carrega enquanto o Hermes pensa
+  if (text.trim()) window.hermes.voiceWarm('tts');
 
   if (!text.trim()) {
     setState('idle');

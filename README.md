@@ -67,7 +67,14 @@ e, se você tiver GPU NVIDIA, instalar a voz de alta qualidade.
   uv pip install --python .venv -r requirements.txt "coqui-tts[codec]"
   ```
   e aponte a "Pasta do servidor de voz" (Configurações) para a pasta `voice-server`.
+  No macOS, se você também tiver o `whisper-cpp` do Homebrew instalado, o app usa a GPU
+  (Metal) para transcrever em vez da CPU — mesmo tamanho de modelo, cerca de três vezes
+  mais rápido. É automático: se não estiver instalado, o servidor de voz transcreve.
 - **Só texto**: menu Voz → "Só texto".
+
+Para poupar memória, os modelos de voz hibernam depois de um tempo parado (configurável).
+O app recarrega o de audição assim que você começa a falar e o de fala assim que a
+pergunta sai — então a espera acontece por trás da conversa, não depois dela.
 
 ## Dois modos
 
@@ -78,11 +85,14 @@ o mesmo assistente:
 - **Janela de chat** — um app de conversa de verdade: janela com barra de título que
   minimiza para a barra de tarefas (no macOS, com os semáforos de sempre; o vermelho
   recolhe para a bandeja e o assistente segue vivo), conversas separadas e salvas (cada uma com foto,
-  fixar no topo, arquivar, renomear, exportar), busca, markdown com botão de copiar e
+  fixar no topo, arquivar, renomear, exportar), markdown com botão de copiar e
   anexos que ele **lê de fato** — PDF, Word, Excel, PowerPoint, imagem e áudio
-  (transcrito no seu computador). Dá para gravar um áudio no compositor, pedir para
-  ouvir qualquer resposta, editar a última pergunta e regenerar a resposta. O clipe
-  aparece em miniatura ali no canto, reagindo enquanto você digita.
+  (transcrito no seu computador). Dá para pedir para ouvir qualquer resposta, editar a
+  última pergunta e regenerar a resposta. O clipe aparece em miniatura ali no canto,
+  reagindo enquanto você digita.
+  **Busca de mensagens** com `Ctrl+K` (`Cmd+K` no Mac) ou a lupa do cabeçalho: procura
+  dentro de todas as conversas, sem ligar para acento nem maiúscula, e leva direto à
+  mensagem.
 
 **Os dois modos falam na mesma conversa**: o que você pergunta por voz aparece no chat e
 continua de onde parou, e vice-versa. Um clique troca de modo nos dois sentidos — o clipe

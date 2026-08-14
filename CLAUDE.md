@@ -42,6 +42,10 @@ dela. Leia o `README.md` para o panorama. Este arquivo é o seu roteiro de insta
      torch torchaudio && uv pip install --python .venv -r requirements.txt "coqui-tts[codec]"`,
      depois aponte a "Pasta do servidor de voz" nas Configurações para `voice-server/`.
      (Downloads grandes: ~2,5 GB de PyTorch + ~3,5 GB de modelos no primeiro uso.)
+   - **macOS + `brew install whisper-cpp`**: com o binário presente, a voz completa passa a
+     transcrever pelo whisper.cpp na GPU (Metal) — mesmo porte de modelo, ~3x mais rápido
+     que o faster-whisper em CPU. O app baixa o modelo (~515 MB) sozinho na primeira vez e
+     usa o servidor de voz enquanto isso. Onde há CUDA nada muda.
 
 5. **Verificação final**: personagem visível, `Ctrl+Alt+Space`, a pessoa fala, o Hermes
    dela responde por voz. Menu do botão direito: Modo, Voz, Personalidade, Cor, Tamanho.
@@ -68,7 +72,16 @@ dela. Leia o `README.md` para o panorama. Este arquivo é o seu roteiro de insta
   (`/v1/chat/completions`, Bearer = `bridgeToken` do settings).
 - Voz leve: binário e modelo em `%APPDATA%\hermes-assistente\whisper\`.
 - Voz completa: `voice-server/` com venv Python 3.11 (uv); os modelos não aceitam
-  inferência concorrente (o servidor já serializa — não "otimize" isso).
+  inferência concorrente (o servidor já serializa — não "otimize" isso). A **montagem** do
+  XTTS roda fora dessa trava de propósito: é trabalho de CPU, e prendê-la faria uma
+  transcrição esperar os ~13 s de carga.
+- Os modelos hibernam depois de `idleUnloadMin` sem uso. O app chama
+  `POST /warmup?what=stt` quando começa a gravar e `?what=tts` quando manda a pergunta,
+  para a recarga acontecer atrás de esperas que já existiam. Não mova esses avisos para
+  depois da transcrição sem medir.
+- **Não tente antecipar a fala** (começar a falar na primeira frase, tocando o áudio aos
+  pedaços). Foi tentado e revertido: em CPU o XTTS gera a ~0,9x o tempo real, a margem não
+  segura a fila de áudio e a fala engasga — 67 buracos em 4 respostas, o pior de 880 ms.
 - O servidor de voz é filho do app e renasce sozinho se cair.
 
 ## Problemas comuns
@@ -82,6 +95,9 @@ dela. Leia o `README.md` para o panorama. Este arquivo é o seu roteiro de insta
   (app sem assinatura digital).
 - **Voz leve não entende nada** → microfone padrão errado no sistema; e a primeira
   transcrição após abrir o app é mais lenta (carga do modelo).
+- **A fala demora muito para começar depois de um tempo parado** → é a hibernação
+  recarregando os modelos. Suba o `idleUnloadMin` nas Configurações (ou 0 para desligar)
+  se sobrar memória.
 - **macOS: voz leve reclama de whisper.cpp** → `brew install whisper-cpp` (o app procura
   o `whisper-cli` do Homebrew).
 - **Anexo grande ou PDF escaneado** → o limite é 20 MB por arquivo (25 MB para áudio), e

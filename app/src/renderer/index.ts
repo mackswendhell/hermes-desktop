@@ -90,10 +90,12 @@ function applyTheme(theme: string): void {
 
 window.hermes.getSettings().then((s) => {
   applyTheme(s.theme);
+  stage.classList.toggle('clippy', s.size === 'clippy');
   setSpeechSide(s.speechSide);
 });
 window.hermes.onSettingsChanged((s) => {
   applyTheme(s.theme);
+  stage.classList.toggle('clippy', s.size === 'clippy');
   setSpeechSide(s.speechSide);
 });
 
