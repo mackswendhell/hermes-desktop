@@ -30,6 +30,13 @@ contextBridge.exposeInMainWorld('hermes', {
   genSshKey: () => ipcRenderer.invoke('gen-ssh-key'),
   testBridge: () => ipcRenderer.invoke('test-bridge'),
   vpsSetup: () => ipcRenderer.invoke('vps-setup'),
+  voiceInstall: () => ipcRenderer.invoke('voice-install'),
+  onVoiceInstallAuto: (cb: () => void) => {
+    ipcRenderer.on('voice-install-auto', () => cb());
+  },
+  onVoiceInstallProgress: (cb: (p: { etapa: string; detalhe?: string }) => void) => {
+    ipcRenderer.on('voice-install-progress', (_e, p) => cb(p));
+  },
   getHistory: () => ipcRenderer.invoke('history-get'),
   sttLocal: (wav: ArrayBuffer, modelo?: 'leve' | 'medio') =>
     ipcRenderer.invoke('stt-local', wav, modelo),

@@ -1,7 +1,9 @@
 fastapi
 uvicorn[standard]
 python-multipart
+torch
+torchaudio
 faster-whisper
-coqui-tts
+coqui-tts[codec]
 transformers>=4.48,<5
 numpy

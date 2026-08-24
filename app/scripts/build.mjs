@@ -60,6 +60,13 @@ await build({
 for (const f of ['index.html', 'settings.html', 'styles.css', 'theme.css', 'chat.html', 'chat.css']) {
   copyFileSync(path.join(root, 'src/renderer', f), path.join(dist, f));
 }
+// voice-server: só o código (12 KB). A venv (~1,2 GB) é montada na máquina do
+// usuário pelo instalador — ver src/main/voiceInstall.ts
+const vsOut = path.join(dist, 'voice-server');
+mkdirSync(vsOut, { recursive: true });
+for (const f of ['server.py', 'requirements.txt']) {
+  copyFileSync(path.join(root, '..', 'voice-server', f), path.join(vsOut, f));
+}
 mkdirSync(path.join(dist, 'assets'), { recursive: true });
 for (const f of readdirSync(path.join(root, 'assets'))) {
   copyFileSync(path.join(root, 'assets', f), path.join(dist, 'assets', f));

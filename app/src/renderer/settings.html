@@ -109,6 +109,18 @@
   <button id="btn-test" class="primary">Testar conexão</button>
   <div id="status"></div>
 
+  <h2>Voz local</h2>
+  <div id="voice-state" class="hint">Verificando…</div>
+  <button id="btn-voice-install">Instalar voz local</button>
+  <p class="hint">
+    Transcrição e fala no seu computador, sem nuvem. Baixa cerca de 1,3 GB para a pasta
+    de dados do app. Se não houver Python, ele é baixado junto.
+  </p>
+  <div id="voice-progress" class="hidden">
+    <div id="voice-etapa"></div>
+    <div id="voice-detalhe" class="hint"></div>
+  </div>
+
   <h2>Voz na nuvem</h2>
   <label for="groqApiKey">Chave da API Groq (transcrição de voz gratuita)</label>
   <input type="text" id="groqApiKey" placeholder="gsk_..." />

@@ -24,6 +24,7 @@ import {
   hasVoiceServerVenv,
   warmVoice,
 } from './voiceServer';
+import { instalarVoiceServer, voiceInstallDir } from './voiceInstall';
 import {
   ensureWhisper,
   transcribeLocal,
@@ -579,6 +580,28 @@ function registerHotkey(): void {
   log(ok ? `[hotkey] ${settings.hotkey} registrado` : `[hotkey] FALHA ao registrar ${settings.hotkey}`);
 }
 
+/**
+ * Uma vez só: oferece a voz local a quem ainda não a tem. "Agora não" fica
+ * gravado — o botão continua nas Configurações.
+ */
+function perguntarVozLocal(): void {
+  if (settings.voiceInstallAsked || hasVoiceServerVenv()) return;
+  const r = dialog.showMessageBoxSync({
+    type: 'question',
+    buttons: ['Instalar', 'Agora não'],
+    defaultId: 0,
+    cancelId: 1,
+    title: 'Voz local',
+    message: 'Instalar a voz local?',
+    detail:
+      'Transcrição e fala rodando no seu computador, sem depender da nuvem.\n' +
+      'Baixa cerca de 1,3 GB. Dá para instalar depois em Configurações.',
+  });
+  settings = { ...settings, voiceInstallAsked: true };
+  saveSettings(settings);
+  if (r === 0) openSettingsWindow(true);
+}
+
 function setupIpc(): void {
   ipcMain.on('drag-start', () => {
     if (!win) return;
@@ -641,6 +664,22 @@ function setupIpc(): void {
 
   ipcMain.handle('gen-ssh-key', () => ensureSshKey());
   ipcMain.handle('test-bridge', () => testBridge(settings));
+
+  ipcMain.handle('voice-install', async (e) => {
+    try {
+      const dir = await instalarVoiceServer((etapa, detalhe) =>
+        e.sender.send('voice-install-progress', { etapa, detalhe }),
+      );
+      settings = { ...settings, voiceServerDir: dir, voiceInstallAsked: true };
+      if (settings.voiceEngine !== 'xtts') settings.voiceEngine = 'xtts';
+      saveSettings(settings);
+      setVoiceServerDir(dir);
+      startVoiceServer();
+      return { ok: true, message: 'Voz local instalada.' };
+    } catch (err) {
+      return { ok: false, message: (err as Error).message };
+    }
+  });
 
   ipcMain.handle('vps-setup', async () => {
     const result = await autoConfigureVps(settings);
@@ -993,6 +1032,7 @@ if (!gotLock) {
     setupIpc();
     // primeiro uso: sem VPS configurada, abre direto as Configurações
     if (!settings.vpsHost && !settings.bridgeUrl) openSettingsWindow();
+    perguntarVozLocal();
     applyAutoStart();
     if (settings.voiceEngine === 'xtts') startVoiceServer();
     else if (!whisperReady()) ensureWhisper(voiceProgress).catch(() => undefined);

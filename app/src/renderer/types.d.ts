@@ -94,6 +94,9 @@ export interface HermesBridge {
   genSshKey(): Promise<{ publicKey: string; authorizeCommand: string }>;
   testBridge(): Promise<{ ok: boolean; message: string }>;
   vpsSetup(): Promise<{ ok: boolean; message: string }>;
+  voiceInstall(): Promise<{ ok: boolean; message: string }>;
+  onVoiceInstallProgress(cb: (p: { etapa: string; detalhe?: string }) => void): void;
+  onVoiceInstallAuto(cb: () => void): void;
   getHistory(): Promise<HistoryEntry[]>;
   sttLocal(wav: ArrayBuffer, modelo?: 'leve' | 'medio'): Promise<string>;
   /** true quando o STT local acelerado (whisper.cpp na GPU) está pronto para o motor local */

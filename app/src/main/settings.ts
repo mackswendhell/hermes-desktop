@@ -17,6 +17,8 @@ export interface Settings {
   chatPersona: Persona;
   theme: string;
   voiceServerDir: string;
+  /** já perguntamos sobre instalar a voz local? evita repetir a cada boot */
+  voiceInstallAsked: boolean;
   speechSide: 'left' | 'right';
   muted: boolean;
   size: string;
@@ -46,6 +48,7 @@ const defaults: Settings = {
   chatPersona: 'normal',
   theme: 'dourado',
   voiceServerDir: '',
+  voiceInstallAsked: false,
   speechSide: 'left',
   muted: false,
   size: 'medio',

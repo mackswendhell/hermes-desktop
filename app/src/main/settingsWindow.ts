@@ -3,9 +3,10 @@ import path from 'node:path';
 
 let win: BrowserWindow | null = null;
 
-export function openSettingsWindow(): void {
+export function openSettingsWindow(autoVoiceInstall = false): void {
   if (win) {
     win.focus();
+    if (autoVoiceInstall) win.webContents.send('voice-install-auto');
     return;
   }
   win = new BrowserWindow({
@@ -22,5 +23,8 @@ export function openSettingsWindow(): void {
     },
   });
   win.loadFile(path.join(__dirname, 'settings.html'));
+  if (autoVoiceInstall) {
+    win.webContents.once('did-finish-load', () => win?.webContents.send('voice-install-auto'));
+  }
   win.on('closed', () => (win = null));
 }
