@@ -16,3 +16,6 @@ amostras-voz/
 CLAUDE.local.md
 settings.json
 .env
+
+# lixo do macOS
+.DS_Store

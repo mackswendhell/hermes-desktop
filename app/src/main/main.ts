@@ -90,7 +90,7 @@ function voiceProgress(msg: string): void {
 }
 
 const SIZES: { label: string; id: string; scale: number }[] = [
-  { label: 'Pequeno', id: 'pequeno', scale: 0.72 },
+  { label: 'Pequeno', id: 'pequeno', scale: 0.54 },
   { label: 'Médio', id: 'medio', scale: 1 },
   { label: 'Grande', id: 'grande', scale: 1.25 },
   // ponytail: um terço do pequeno seria 0.24, mas 0.25 é o piso do zoom do Chromium —
