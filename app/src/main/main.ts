@@ -103,10 +103,15 @@ function voiceProgress(msg: string): void {
   win?.webContents.send('voice-progress', msg);
 }
 
+// No Windows o Médio e o Grande saem 30% menores: a tela do Mac é sempre menor e o
+// personagem já nasce no tamanho certo lá, enquanto aqui vinha grande demais.
+// Pequeno e Clippy não entram — já foram acertados na v0.3.7 e no porte do macOS.
+const FATOR = process.platform === 'win32' ? 0.7 : 1;
+
 const SIZES: { label: string; id: string; scale: number }[] = [
   { label: 'Pequeno', id: 'pequeno', scale: 0.54 },
-  { label: 'Médio', id: 'medio', scale: 1 },
-  { label: 'Grande', id: 'grande', scale: 1.25 },
+  { label: 'Médio', id: 'medio', scale: 1 * FATOR },
+  { label: 'Grande', id: 'grande', scale: 1.25 * FATOR },
   // ponytail: um terço do pequeno seria 0.24, mas 0.25 é o piso do zoom do Chromium —
   // abaixo disso a janela encolheria e o conteúdo não, cortando o personagem.
   { label: 'Clippy', id: 'clippy', scale: 0.25 },

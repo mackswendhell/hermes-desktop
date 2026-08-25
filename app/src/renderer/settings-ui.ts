@@ -75,7 +75,9 @@ document.getElementById('btn-vps-setup')!.addEventListener('click', async () => 
   const r = await window.hermes.vpsSetup();
   status.textContent = r.message;
   status.className = r.ok ? 'ok' : 'err';
-  if (r.ok) load();
+  // o token já foi gerado e salvo mesmo no sucesso parcial (container sem reiniciar,
+  // porta 8642 fechada) — sem recarregar, o campo fica vazio e parece que falhou tudo
+  if (r.token) load();
 });
 
 document.getElementById('btn-test')!.addEventListener('click', async () => {

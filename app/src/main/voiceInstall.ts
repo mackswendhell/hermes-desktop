@@ -5,7 +5,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import path from 'node:path';
 import { log } from './logger';
-import { isWin } from './platform';
+import { isWin, TAR_EXE } from './platform';
 
 /**
  * Instala o voice-server na pasta de dados do usuário. Os 12 KB de código vêm
@@ -84,7 +84,7 @@ async function baixarPython(dir: string, prog: Progress): Promise<string> {
 
   prog('Extraindo Python');
   // tar existe no macOS, no Linux e no Windows 10+ (bsdtar em System32)
-  await run('tar', ['-xzf', tgz, '-C', dir], dir, (l) => log(`[voice-install] ${l}`));
+  await run(TAR_EXE, ['-xzf', tgz, '-C', dir], dir, (l) => log(`[voice-install] ${l}`));
   rmSync(tgz, { force: true });
 
   const py = isWin ? path.join(dir, 'python', 'python.exe') : path.join(dir, 'python', 'bin', 'python3');

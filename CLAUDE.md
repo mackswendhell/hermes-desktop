@@ -35,13 +35,13 @@ dela. Leia o `README.md` para o panorama. Este arquivo é o seu roteiro de insta
      (~190 MB); no macOS instale o transcritor com `brew install whisper-cpp`.
    - A voz na nuvem (STT Groq + TTS Edge, zero GPU) só precisa da chave da Groq nas
      Configurações — é o caminho recomendado no macOS.
-   - Voz completa (XTTS local): no Windows com **GPU NVIDIA 6+ GB**, rode
-     `powershell -ExecutionPolicy Bypass -File instalar-voz.ps1` na raiz do repo.
-     No **macOS (Apple Silicon)** roda em CPU mais rápido que o tempo real:
-     `cd voice-server && uv venv --python 3.11 .venv && uv pip install --python .venv
-     torch torchaudio && uv pip install --python .venv -r requirements.txt "coqui-tts[codec]"`,
-     depois aponte a "Pasta do servidor de voz" nas Configurações para `voice-server/`.
-     (Downloads grandes: ~2,5 GB de PyTorch + ~3,5 GB de modelos no primeiro uso.)
+   - Voz completa (XTTS local): botão **"Instalar voz local"** nas Configurações — ele
+     monta a venv na pasta de dados do app e baixa um Python 3.11 standalone se não houver
+     um 3.10–3.12 no sistema. Vale com **GPU NVIDIA 6+ GB** no Windows; no **macOS
+     (Apple Silicon)** roda em CPU mais rápido que o tempo real.
+     (Downloads grandes: ~1,3 GB de dependências + ~3,5 GB de modelos no primeiro uso.)
+     O `instalar-voz.ps1` segue no repo como caminho manual no Windows; quem instalar à
+     mão precisa apontar a "Pasta do servidor de voz" nas Configurações.
    - **macOS + `brew install whisper-cpp`**: com o binário presente, a voz completa passa a
      transcrever pelo whisper.cpp na GPU (Metal) — mesmo porte de modelo, ~3x mais rápido
      que o faster-whisper em CPU. O app baixa o modelo (~515 MB) sozinho na primeira vez e

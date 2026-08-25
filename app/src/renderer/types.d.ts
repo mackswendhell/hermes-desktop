@@ -93,7 +93,7 @@ export interface HermesBridge {
   saveSettings(patch: Partial<RendererSettings>): Promise<RendererSettings>;
   genSshKey(): Promise<{ publicKey: string; authorizeCommand: string }>;
   testBridge(): Promise<{ ok: boolean; message: string }>;
-  vpsSetup(): Promise<{ ok: boolean; message: string }>;
+  vpsSetup(): Promise<{ ok: boolean; message: string; token?: string }>;
   voiceInstall(): Promise<{ ok: boolean; message: string }>;
   onVoiceInstallProgress(cb: (p: { etapa: string; detalhe?: string }) => void): void;
   onVoiceInstallAuto(cb: () => void): void;

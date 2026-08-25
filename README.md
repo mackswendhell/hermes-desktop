@@ -61,15 +61,11 @@ e, se você tiver GPU NVIDIA, instalar a voz de alta qualidade.
      **Chave da Groq** e escolha o motor de voz **"Voz na nuvem"**. Pronto: o Edge TTS não
      precisa de chave nenhuma.
 - **Voz completa (local, XTTS v2)**: vozes neurais muito mais naturais (8 opções,
-  incluindo graves). No Windows com GPU NVIDIA: rode `instalar-voz.ps1` (PowerShell).
-  No macOS (Apple Silicon roda em CPU mais rápido que o tempo real):
-  ```bash
-  cd voice-server
-  uv venv --python 3.11 .venv
-  uv pip install --python .venv torch torchaudio
-  uv pip install --python .venv -r requirements.txt "coqui-tts[codec]"
-  ```
-  e aponte a "Pasta do servidor de voz" (Configurações) para a pasta `voice-server`.
+  incluindo graves). Clique em **"Instalar voz local"** nas Configurações e espere — ele
+  baixa cerca de 1,3 GB para a pasta de dados do app e, se você não tiver Python 3.10–3.12,
+  baixa um Python isolado junto (sem mexer no PATH, sem pedir administrador). Vale a pena
+  com GPU NVIDIA no Windows; no macOS (Apple Silicon) roda em CPU mais rápido que o tempo
+  real. O `instalar-voz.ps1` na raiz continua aí para quem prefere fazer à mão no Windows.
   No macOS, se você também tiver o `whisper-cpp` do Homebrew instalado, o app usa a GPU
   (Metal) para transcrever em vez da CPU — mesmo tamanho de modelo, cerca de três vezes
   mais rápido. É automático: se não estiver instalado, o servidor de voz transcreve.
