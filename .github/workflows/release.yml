@@ -13,6 +13,11 @@ jobs:
   build:
     strategy:
       fail-fast: false
+      # em série de propósito: os dois jobs em paralelo veem "release doesn't exist"
+      # ao mesmo tempo e cada um cria a sua — na v0.3.9 saíram dois rascunhos para a
+      # mesma tag, um com o .exe e outro com o .dmg. Serializado, o segundo encontra
+      # a Release do primeiro e só anexa. Custa ~2 min a mais por release.
+      max-parallel: 1
       matrix:
         include:
           - os: windows-latest
