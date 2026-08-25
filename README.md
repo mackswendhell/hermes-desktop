@@ -9,6 +9,9 @@ rodando na **sua VPS** — mesma memória e personalidade que você já tem no T
   <img src="screenshots/personagem.png" alt="O personagem na área de trabalho" height="300">
   <img src="screenshots/configuracoes.png" alt="Tela de configurações no primeiro uso" height="300">
 </p>
+<p align="center">
+  <img src="screenshots/chat.png" alt="A janela de chat, com markdown e tabelas" width="720">
+</p>
 
 ## O que você precisa
 
@@ -84,13 +87,14 @@ o mesmo assistente:
 - **Personagem flutuante** — o clipe sobre as janelas, para falar e ouvir.
 - **Janela de chat** — um app de conversa de verdade: janela com barra de título que
   minimiza para a barra de tarefas (no macOS, com os semáforos de sempre; o vermelho
-  recolhe para a bandeja e o assistente segue vivo), conversas separadas e salvas (cada uma com foto,
-  fixar no topo, arquivar, renomear, exportar), markdown com botão de copiar e
+  recolhe para a bandeja e o assistente segue vivo), conversa contínua e salva (exportar `.md` e
+  limpar no ⋮ da barra de cima), markdown com botão de copiar e **tabelas que você baixa
+  em `.xlsx` ou `.csv`** (é só pedir a tabela e clicar em cima dela), e
   anexos que ele **lê de fato** — PDF, Word, Excel, PowerPoint, imagem e áudio
   (transcrito no seu computador). Dá para pedir para ouvir qualquer resposta, editar a
   última pergunta e regenerar a resposta. O clipe aparece em miniatura ali no canto,
   reagindo enquanto você digita.
-  **Busca de mensagens** com `Ctrl+K` (`Cmd+K` no Mac) ou a lupa do cabeçalho: procura
+  **Busca de mensagens** com `Ctrl+K` (`Cmd+K` no Mac) ou a lupa da barra: procura
   dentro de todas as conversas, sem ligar para acento nem maiúscula, e leva direto à
   mensagem.
 
@@ -107,7 +111,7 @@ agenda, outra para trabalho. A personalidade é escolhida por modo: por padrão 
 Personagem animado que segue seu mouse com os olhos • conversa por voz ou texto •
 personalidades (Cavaleiro épico-cômico ou assistente direto) • 6 cores, 4 tamanhos (do
 Clippy miudinho ao grande) •
-conversas salvas, separadas e pesquisáveis • anexos lidos de verdade • avisos proativos do
+conversas salvas e pesquisáveis • respostas em tabela • anexos lidos de verdade • avisos proativos do
 seu Hermes (com notificação do sistema no modo chat) • modo reduzido automático com OBS
 aberto e some em tela cheia (Windows) • hibernação da GPU configurável.
 

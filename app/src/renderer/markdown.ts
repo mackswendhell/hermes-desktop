@@ -1,7 +1,7 @@
 // Renderer de markdown que constrói nós de DOM com createElement/textContent.
 // Nunca usa innerHTML, então texto do modelo não tem como virar markup — é por isso
 // que não há sanitizador aqui.
-// ponytail: sem tabelas, sem lista aninhada além de um nível, sem highlight de sintaxe.
+// ponytail: sem lista aninhada além de um nível, sem highlight de sintaxe.
 
 export interface CodeBlock {
   lang: string;
@@ -75,6 +75,86 @@ function codeBlock(lang: string, code: string): HTMLElement {
   return wrap;
 }
 
+// tabela GFM: cabeçalho, linha de travessões e as linhas de dados
+const TABLE_SEP = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/;
+
+function celulas(linha: string): string[] {
+  return linha
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((c) => c.trim());
+}
+
+// `:---:` centraliza, `---:` alinha à direita; o resto fica no padrão do CSS
+function alinhamento(sep: string): string {
+  const fim = sep.endsWith(':');
+  if (sep.startsWith(':')) return fim ? 'center' : '';
+  return fim ? 'right' : '';
+}
+
+function tableBlock(linhas: string[]): HTMLElement {
+  const bloco = document.createElement('div');
+  bloco.className = 'table-block';
+  // rola na horizontal em vez de espremer a coluna: a bolha do chat é estreita
+  const wrap = document.createElement('div');
+  wrap.className = 'table-wrap';
+  const table = document.createElement('table');
+
+  const cabecalho = celulas(linhas[0]);
+  const alinhas = celulas(linhas[1]).map(alinhamento);
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr');
+  for (let i = 0; i < cabecalho.length; i++) {
+    const th = document.createElement('th');
+    th.append(...inline(cabecalho[i]));
+    if (alinhas[i]) th.style.textAlign = alinhas[i];
+    trh.appendChild(th);
+  }
+  thead.appendChild(trh);
+
+  const tbody = document.createElement('tbody');
+  for (const linha of linhas.slice(2)) {
+    const tr = document.createElement('tr');
+    const cs = celulas(linha);
+    // linha mais curta que o cabeçalho: completa com vazio para a grade não torcer
+    for (let i = 0; i < cabecalho.length; i++) {
+      const td = document.createElement('td');
+      td.append(...inline(cs[i] ?? ''));
+      if (alinhas[i]) td.style.textAlign = alinhas[i];
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+
+  table.append(thead, tbody);
+  wrap.appendChild(table);
+  bloco.append(tableBar(table), wrap);
+  return bloco;
+}
+
+// baixar a tabela: o main é quem tem o SheetJS e o diálogo de salvar
+function tableBar(table: HTMLTableElement): HTMLElement {
+  const bar = document.createElement('div');
+  bar.className = 'table-bar';
+  for (const formato of ['xlsx', 'csv'] as const) {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = formato;
+    btn.addEventListener('click', async () => {
+      const linhas = Array.from(table.rows, (r) => Array.from(r.cells, (c) => c.textContent ?? ''));
+      const salvo = await window.hermes.tableSave(linhas, formato);
+      if (salvo) {
+        btn.textContent = 'salvo ✓';
+        setTimeout(() => (btn.textContent = formato), 1500);
+      }
+    });
+    bar.appendChild(btn);
+  }
+  return bar;
+}
+
 export function copyInto(btn: HTMLElement, text: string): void {
   navigator.clipboard.writeText(text).then(() => {
     const antes = btn.textContent;
@@ -135,7 +215,8 @@ function textBlocks(body: string): Node[] {
     list = null;
   };
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const head = /^(#{1,3})\s+(.*)$/.exec(line);
     const bullet = /^\s*[-*+]\s+(.*)$/.exec(line);
     const numbered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
@@ -144,6 +225,16 @@ function textBlocks(body: string): Node[] {
     if (!line.trim()) {
       flushPara();
       flushList();
+      continue;
+    }
+    if (line.includes('|') && TABLE_SEP.test(lines[i + 1] ?? '')) {
+      flushPara();
+      flushList();
+      const bloco = [line, lines[i + 1]];
+      let j = i + 2;
+      while (j < lines.length && lines[j].trim() && lines[j].includes('|')) bloco.push(lines[j++]);
+      out.push(tableBlock(bloco));
+      i = j - 1;
       continue;
     }
     if (head) {

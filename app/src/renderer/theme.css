@@ -41,6 +41,14 @@
   --label: #ddd0fa;
 }
 
+.theme-titanio {
+  --c1: #cdc2b0;
+  --c2: #9c8f7c;
+  --c3: #6a6053;
+  --halo: #d8cec0;
+  --label: #e8e1d6;
+}
+
 .theme-ciano {
   --c1: #7fd8e8;
   --c2: #3fb5cc;

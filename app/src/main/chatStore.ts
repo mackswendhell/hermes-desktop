@@ -6,7 +6,6 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
-  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
@@ -209,14 +208,6 @@ export function rewriteChat(chat: Chat): void {
   const tmp = chatFile(chat.id) + '.tmp';
   writeFileSync(tmp, lines.join('\n') + '\n', 'utf-8');
   renameSync(tmp, chatFile(chat.id));
-}
-
-export function deleteChat(id: string): void {
-  try {
-    unlinkSync(chatFile(id));
-  } catch (err) {
-    log(`[chat] falha ao apagar ${id}: ${err}`);
-  }
 }
 
 export function listChats(): ChatSummary[] {

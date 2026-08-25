@@ -81,6 +81,7 @@ const THEME_CLASSES = [
   'theme-grafite',
   'theme-roxo',
   'theme-ciano',
+  'theme-titanio',
 ];
 
 function applyTheme(theme: string): void {

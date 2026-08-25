@@ -77,3 +77,29 @@ function unescapeXml(s: string): string {
     .replace(/&apos;/g, "'")
     .replace(/&amp;/g, '&');
 }
+
+// ---------- caminho inverso: a tabela de uma resposta vira arquivo ----------
+
+// só número puro vira número na planilha; "R$ 4.500" e "3%" continuam texto, que é
+// como o Excel também os trataria. ponytail: assume pt-BR (ponto de milhar, vírgula
+// decimal) — se um dia o app falar outra língua, passar o locale junto
+function talvezNumero(txt: string): string | number {
+  if (!/^-?\d{1,3}(\.\d{3})*(,\d+)?$|^-?\d+([.,]\d+)?$/.test(txt)) return txt;
+  const n = Number(txt.replace(/\./g, '').replace(',', '.'));
+  return Number.isFinite(n) ? n : txt;
+}
+
+export async function tabelaXlsx(linhas: string[][]): Promise<Buffer> {
+  const XLSX = await import('xlsx');
+  const ws = XLSX.utils.aoa_to_sheet(linhas.map((l) => l.map(talvezNumero)));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Tabela');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+}
+
+// ponto e vírgula e BOM porque é assim que o Excel em pt-BR abre UTF-8 sem pedir nada;
+// os números vão como estão na tela ("1.200,50"), que já é o formato que ele espera
+export function tabelaCsv(linhas: string[][]): string {
+  const cel = (c: string) => (/[;"\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c);
+  return '﻿' + linhas.map((l) => l.map(cel).join(';')).join('\r\n') + '\r\n';
+}

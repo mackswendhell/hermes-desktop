@@ -7,22 +7,15 @@ import type { Chat, ChatAttachment, ChatMsg, ChatSummary, RendererSettings, Sear
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-const listEl = $('chat-list');
 const msgsEl = $('messages');
 const inputEl = $<HTMLTextAreaElement>('input');
-const searchEl = $<HTMLInputElement>('search');
 const attachBar = $('attach-bar');
 const attachInput = $<HTMLInputElement>('attach-input');
-const avatarInput = $<HTMLInputElement>('avatar-input');
 const statusEl = $('composer-status');
-const convTitle = $('conv-title');
-const convAvatar = $('conv-avatar');
 const ctxMenu = $('ctx-menu');
 const stage = $('stage');
 const veil = $('drop-veil');
 const btnSend = $<HTMLButtonElement>('btn-send');
-const askDlg = $<HTMLDialogElement>('ask-dlg');
-const askInput = $<HTMLInputElement>('ask-input');
 const findDlg = $<HTMLDialogElement>('find-dlg');
 const findInput = $<HTMLInputElement>('find-input');
 const findHits = $('find-hits');
@@ -32,10 +25,9 @@ const MAX_FILE_BYTES = 20_000_000;
 const MAX_AUDIO_BYTES = 25_000_000;
 const MAX_TEXT_CHARS = 200_000;
 const MAX_IMG_SIDE = 1568;
-const AVATAR_SIDE = 96;
 const AUDIO_EXT = /\.(mp3|m4a|wav|ogg|opus|flac|aac|webm|mp4)$/i;
 const OFFICE_EXT = /\.(docx|xlsx|xls|pptx)$/i;
-const THEMES = ['azul', 'dourado', 'verde', 'grafite', 'roxo', 'ciano'];
+const THEMES = ['azul', 'dourado', 'verde', 'grafite', 'roxo', 'ciano', 'titanio'];
 
 let settings: RendererSettings;
 let chat: Chat | null = null;
@@ -43,7 +35,6 @@ let attachments: ChatAttachment[] = [];
 let streamReqId = '';
 let streamEl: HTMLElement | null = null;
 let showFrom = 0;
-let mostrandoArquivadas = false;
 
 function status(msg: string): void {
   statusEl.textContent = msg;
@@ -63,7 +54,7 @@ $('btn-min').addEventListener('click', () => window.hermes.winMin());
 $('btn-max').addEventListener('click', () => window.hermes.winMax());
 $('btn-close').addEventListener('click', () => window.hermes.hideWindow());
 $('titlebar').addEventListener('dblclick', (e) => {
-  if ((e.target as HTMLElement).closest('#win-buttons')) return;
+  if ((e.target as HTMLElement).closest('#win-buttons, #bar-actions')) return;
   window.hermes.winMax();
 });
 $('btn-pin').addEventListener('click', async () => {
@@ -71,37 +62,6 @@ $('btn-pin').addEventListener('click', async () => {
   $('btn-pin').classList.toggle('on', on);
 });
 window.hermes.onWinState((s) => ($('btn-max').textContent = s.maximized ? '❐' : '□'));
-
-/* ---------------- lista de conversas ---------------- */
-
-async function refreshList(): Promise<void> {
-  if (searchEl.value.trim()) return;
-  const chats = await window.hermes.chatList();
-  const ativas = chats.filter((c) => !c.archived);
-  const arquivadas = chats.filter((c) => c.archived);
-
-  listEl.textContent = '';
-  if (arquivadas.length) {
-    const linha = document.createElement('div');
-    linha.className = 'side-label';
-    linha.style.cursor = 'pointer';
-    linha.textContent = `${mostrandoArquivadas ? '▾' : '▸'} Arquivadas (${arquivadas.length})`;
-    linha.addEventListener('click', () => {
-      mostrandoArquivadas = !mostrandoArquivadas;
-      refreshList();
-    });
-    listEl.appendChild(linha);
-    if (mostrandoArquivadas) for (const c of arquivadas) listEl.appendChild(chatItem(c));
-  }
-  if (!ativas.length && !arquivadas.length) {
-    const vazio = document.createElement('div');
-    vazio.className = 'side-label';
-    vazio.textContent = 'Nenhuma conversa ainda';
-    listEl.appendChild(vazio);
-    return;
-  }
-  for (const c of ativas) listEl.appendChild(chatItem(c));
-}
 
 function avatarNode(c: { avatar: string; title: string }): HTMLElement {
   const el = document.createElement('div');
@@ -111,53 +71,10 @@ function avatarNode(c: { avatar: string; title: string }): HTMLElement {
   return el;
 }
 
-function chatItem(c: ChatSummary): HTMLElement {
-  const el = document.createElement('div');
-  el.className = 'chat-item' + (chat?.id === c.id ? ' active' : '');
-  el.appendChild(avatarNode(c));
-
-  const texto = document.createElement('div');
-  texto.className = 'texto';
-  const t = document.createElement('div');
-  t.className = 't';
-  const nome = document.createElement('span');
-  nome.textContent = c.title;
-  t.appendChild(nome);
-  if (c.pinned) {
-    const pin = document.createElement('span');
-    pin.className = 'marcas';
-    pin.textContent = '📌';
-    t.appendChild(pin);
-  }
-  const p = document.createElement('div');
-  p.className = 'p';
-  p.textContent = c.preview;
-  texto.append(t, p);
-  el.appendChild(texto);
-
-  const chevron = document.createElement('button');
-  chevron.className = 'chat-chevron';
-  chevron.textContent = '▾';
-  chevron.title = 'Opções da conversa';
-  chevron.addEventListener('click', (e) => {
-    e.stopPropagation();
-    abrirMenu(c, chevron);
-  });
-  el.appendChild(chevron);
-
-  el.addEventListener('click', () => openChat(c.id));
-  el.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    abrirMenu(c, chevron);
-  });
-  return el;
-}
-
 /* ---------------- menu de opções da conversa ---------------- */
 
 function fecharMenu(): void {
   ctxMenu.classList.add('hidden');
-  document.querySelectorAll('.chat-chevron.aberto').forEach((b) => b.classList.remove('aberto'));
 }
 
 document.addEventListener('click', (e) => {
@@ -165,7 +82,9 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => e.key === 'Escape' && fecharMenu());
 
-function abrirMenu(c: ChatSummary, âncora: HTMLElement): void {
+type MenuChat = { id: string; title: string };
+
+function abrirMenu(c: MenuChat, âncora: HTMLElement): void {
   ctxMenu.textContent = '';
   const item = (rótulo: string, açao: () => void, perigo = false) => {
     const b = document.createElement('button');
@@ -178,17 +97,6 @@ function abrirMenu(c: ChatSummary, âncora: HTMLElement): void {
     ctxMenu.appendChild(b);
   };
 
-  item(c.archived ? 'Desarquivar' : 'Arquivar conversa', async () => {
-    await window.hermes.chatMeta(c.id, { archived: !c.archived });
-    refreshList();
-  });
-  item(c.pinned ? 'Desafixar' : 'Fixar no topo', async () => {
-    await window.hermes.chatMeta(c.id, { pinned: !c.pinned });
-    refreshList();
-  });
-  item('Renomear', () => renomear(c.id, c.title));
-  item('Trocar foto', () => escolherAvatar(c.id));
-  ctxMenu.appendChild(document.createElement('hr'));
   item('Exportar como .md', async () => {
     const salvo = await window.hermes.chatExport(c.id);
     status(salvo ? `salvo em ${salvo}` : '');
@@ -196,124 +104,26 @@ function abrirMenu(c: ChatSummary, âncora: HTMLElement): void {
   item(
     'Limpar conversa',
     async () => {
-      if (!confirm(`Apagar todas as mensagens de "${c.title}"? A conversa continua na lista.`)) return;
+      if (!confirm(`Apagar todas as mensagens de "${c.title}"? A conversa em si continua.`)) return;
       const limpa = await window.hermes.chatClear(c.id);
       if (limpa && chat?.id === c.id) {
         chat = limpa;
         showFrom = 0;
         renderMessages();
       }
-      refreshList();
     },
     true,
   );
-  item(
-    'Apagar conversa',
-    async () => {
-      if (!confirm(`Apagar "${c.title}" de vez? Não dá para desfazer.`)) return;
-      await window.hermes.chatDelete(c.id);
-      if (chat?.id === c.id) {
-        chat = null;
-        convTitle.textContent = 'Nova conversa';
-        msgsEl.textContent = '';
-        pintarAvatarHeader();
-      }
-      refreshList();
-    },
-    true,
-  );
-
   const r = âncora.getBoundingClientRect();
   ctxMenu.classList.remove('hidden');
   // encaixa dentro da janela: abre para cima/esquerda quando falta espaço
   const alt = ctxMenu.offsetHeight;
   const larg = ctxMenu.offsetWidth;
-  ctxMenu.style.left = `${Math.min(r.left, window.innerWidth - larg - 8)}px`;
+  ctxMenu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - larg - 8))}px`;
   ctxMenu.style.top = `${r.bottom + alt > window.innerHeight ? Math.max(8, r.top - alt) : r.bottom + 4}px`;
-  âncora.classList.add('aberto');
 }
-
-// o Electron não implementa window.prompt(): usa o <dialog> nativo da página.
-// O "confirmou" vem do evento submit, não do returnValue: Enter no campo submete
-// sem submitter e o returnValue viria vazio, igualzinho ao cancelar.
-let askOk = false;
-$('ask-form').addEventListener('submit', () => (askOk = true));
-$('ask-cancel').addEventListener('click', () => askDlg.close());
-
-function pedirTexto(rótulo: string, valor: string): Promise<string | null> {
-  $('ask-label').textContent = rótulo;
-  askInput.value = valor;
-  askOk = false;
-  askDlg.showModal();
-  askInput.select();
-  return new Promise((resolve) =>
-    askDlg.addEventListener('close', () => resolve(askOk ? askInput.value : null), { once: true }),
-  );
-}
-
-async function renomear(id: string, atual: string): Promise<void> {
-  const titulo = await pedirTexto('Nome da conversa:', atual);
-  if (titulo === null) return;
-  await window.hermes.chatRename(id, titulo.trim());
-  if (chat?.id === id) {
-    chat.title = titulo.trim();
-    convTitle.textContent = chat.title || 'Conversa sem título';
-  }
-  refreshList();
-}
-
-/* ---------------- foto da conversa ---------------- */
-
-let avatarAlvo = '';
-
-function escolherAvatar(id: string): void {
-  avatarAlvo = id;
-  avatarInput.click();
-}
-
-avatarInput.addEventListener('change', async () => {
-  const file = avatarInput.files?.[0];
-  avatarInput.value = '';
-  if (!file || !avatarAlvo) return;
-  try {
-    const avatar = await imageToDataUrl(file, AVATAR_SIDE, true);
-    await window.hermes.chatMeta(avatarAlvo, { avatar });
-    if (chat?.id === avatarAlvo) {
-      chat.avatar = avatar;
-      pintarAvatarHeader();
-    }
-    refreshList();
-  } catch (e) {
-    status(e instanceof Error ? e.message : String(e));
-  }
-});
-
-function pintarAvatarHeader(): void {
-  convAvatar.style.backgroundImage = chat?.avatar ? `url("${chat.avatar}")` : '';
-  convAvatar.textContent = chat?.avatar ? '' : '💬';
-}
-
-convAvatar.addEventListener('click', () => chat && escolherAvatar(chat.id));
 
 /* ---------------- busca ---------------- */
-
-let searchTimer: ReturnType<typeof setTimeout> | undefined;
-searchEl.addEventListener('input', () => {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(runSearch, 200);
-});
-
-async function runSearch(): Promise<void> {
-  const q = searchEl.value.trim();
-  if (!q) return refreshList();
-  const hits = await window.hermes.chatSearch(q);
-  listEl.textContent = '';
-  const label = document.createElement('div');
-  label.className = 'side-label';
-  label.textContent = hits.length ? `${hits.length} resultado(s)` : 'nada encontrado';
-  listEl.appendChild(label);
-  for (const h of hits) listEl.appendChild(hitNode(h, q));
-}
 
 // sem acento e sem caixa, como a busca do main, para o destaque cair no lugar certo
 const semAcento = (s: string) =>
@@ -445,8 +255,6 @@ async function openChat(id: string, focusIndex?: number): Promise<void> {
   const loaded = await window.hermes.chatOpen(id);
   if (!loaded) return;
   chat = loaded;
-  convTitle.textContent = loaded.title || 'Conversa sem título';
-  pintarAvatarHeader();
   showFrom = focusIndex !== undefined ? 0 : Math.max(0, loaded.msgs.length - VISIBLE_MSGS);
   renderMessages();
   if (focusIndex !== undefined) {
@@ -456,17 +264,11 @@ async function openChat(id: string, focusIndex?: number): Promise<void> {
     alvo?.classList.add('flash');
     setTimeout(() => alvo?.classList.remove('flash'), 1600);
   }
-  refreshList();
 }
 
-$('btn-new').addEventListener('click', async () => {
-  chat = await window.hermes.chatNew();
-  convTitle.textContent = 'Nova conversa';
-  pintarAvatarHeader();
-  showFrom = 0;
-  renderMessages();
-  refreshList();
-  inputEl.focus();
+$('btn-conv-menu').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (chat) abrirMenu(chat, $('btn-conv-menu'));
 });
 
 /* ---------------- mensagens ---------------- */
@@ -565,6 +367,16 @@ function toolsNode(m: ChatMsg, index: number): HTMLElement {
       regen.addEventListener('click', () => send('', 'regen'));
       tools.appendChild(regen);
     }
+
+    // o markdown que o Hermes escreveu, como veio: baixar é gravar o m.text
+    const md = document.createElement('button');
+    md.textContent = '.md';
+    md.addEventListener('click', async () => {
+      if (!(await window.hermes.msgSave(m.text))) return;
+      md.textContent = 'salvo ✓';
+      setTimeout(() => (md.textContent = '.md'), 1500);
+    });
+    tools.appendChild(md);
   } else {
     const editar = document.createElement('button');
     editar.textContent = 'editar';
@@ -666,10 +478,7 @@ async function send(
       audio,
       mode,
     });
-    if (title) {
-      convTitle.textContent = title;
-      chat.title = title;
-    }
+    if (title) chat.title = title;
     // recarrega do disco: o main é quem grava (e pode ter inserido o aviso de sessão nova)
     await reload();
   } catch (e) {
@@ -695,7 +504,6 @@ async function reload(): Promise<void> {
   renderMessages();
   if (!noFim) msgsEl.scrollTop = scroll;
   setState('idle');
-  refreshList();
 }
 
 window.hermes.onHermesDelta((reqId, delta) => {
@@ -834,7 +642,7 @@ async function transcribeFile(file: Blob, nome: string): Promise<string> {
   return transcribe(file, settings, nome);
 }
 
-async function imageToDataUrl(file: File, maxSide = MAX_IMG_SIDE, quadrado = false): Promise<string> {
+async function imageToDataUrl(file: File, maxSide = MAX_IMG_SIDE): Promise<string> {
   const raw = await new Promise<string>((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(r.result as string);
@@ -848,21 +656,14 @@ async function imageToDataUrl(file: File, maxSide = MAX_IMG_SIDE, quadrado = fal
     i.src = raw;
   });
   const maior = Math.max(img.width, img.height);
-  if (!quadrado && maior <= maxSide && raw.length < 1_500_000) return raw;
+  if (maior <= maxSide && raw.length < 1_500_000) return raw;
 
   const canvas = document.createElement('canvas');
   const ctx2d = canvas.getContext('2d')!;
-  if (quadrado) {
-    // recorta o centro para a foto redonda não distorcer
-    const lado = Math.min(img.width, img.height);
-    canvas.width = canvas.height = maxSide;
-    ctx2d.drawImage(img, (img.width - lado) / 2, (img.height - lado) / 2, lado, lado, 0, 0, maxSide, maxSide);
-  } else {
-    const escala = Math.min(1, maxSide / maior);
-    canvas.width = Math.round(img.width * escala);
-    canvas.height = Math.round(img.height * escala);
-    ctx2d.drawImage(img, 0, 0, canvas.width, canvas.height);
-  }
+  const escala = Math.min(1, maxSide / maior);
+  canvas.width = Math.round(img.width * escala);
+  canvas.height = Math.round(img.height * escala);
+  ctx2d.drawImage(img, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL('image/jpeg', 0.85);
 }
 
@@ -915,21 +716,18 @@ window.hermes.onSettingsChanged((s) => {
 window.hermes.onChatOpen((id) => openChat(id));
 window.hermes.onProactive((_text, chatId) => {
   if (chatId && chat?.id === chatId) openChat(chatId);
-  else refreshList();
 });
 
 (async () => {
   settings = await window.hermes.getSettings();
   applyTheme(settings.theme);
   $('btn-pin').classList.toggle('on', settings.chatPinned);
-  await refreshList();
   const chats = await window.hermes.chatList();
   // a conversa ativa é a que o overlay também usa; sem ela, a mais recente
   const alvo =
     chats.find((c) => c.id === settings.activeChatId) ?? chats.find((c) => !c.archived) ?? chats[0];
   if (alvo) await openChat(alvo.id);
   else chat = await window.hermes.chatNew();
-  pintarAvatarHeader();
   autoGrow();
   inputEl.focus();
 })();

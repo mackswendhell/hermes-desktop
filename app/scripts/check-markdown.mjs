@@ -15,6 +15,7 @@ function makeEl(tag) {
     children: [],
     className: '',
     href: '',
+    style: {},
     set textContent(v) {
       this.children = [String(v)];
     },
@@ -47,7 +48,8 @@ const dump = (node) => {
   if (typeof node === 'string') return node;
   if (node.tagName === '#text') return node.textContent;
   const tag = node.tagName.toLowerCase();
-  return `<${tag}>${node.children.map(dump).join('')}</${tag}>`;
+  const al = node.style?.textAlign ? ` align=${node.style.textAlign}` : '';
+  return `<${tag}${al}>${node.children.map(dump).join('')}</${tag}>`;
 };
 
 await build({
@@ -90,6 +92,27 @@ assert.ok(render('> citado').includes('<blockquote>citado</blockquote>'));
 
 // link markdown vira <a> com o rótulo
 assert.ok(render('veja [o site](https://exemplo.com)').includes('<a>o site</a>'));
+
+// tabela GFM vira <table>, com cabeçalho e as linhas de dados
+const tab = render('| Item | Preço |\n| --- | ---: |\n| Café | 10 |\n| Pão | 5 |');
+assert.ok(tab.includes('<th>Item</th><th align=right>Preço</th>'), tab);
+assert.ok(tab.includes('<td>Café</td><td align=right>10</td>'), tab);
+assert.ok(tab.includes('<td>Pão</td><td align=right>5</td>'), tab);
+
+// `:---:` centraliza a coluna inteira; `:---` fica no padrão, sem alinhamento explícito
+const tabCentro = render('| a | b |\n| :---: | :--- |\n| 1 | 2 |');
+assert.ok(tabCentro.includes('<th align=center>a</th><th>b</th>'), tabCentro);
+assert.ok(tabCentro.includes('<td align=center>1</td><td>2</td>'), tabCentro);
+
+// linha curta demais ganha célula vazia em vez de torcer a grade
+assert.ok(render('| a | b |\n| --- | --- |\n| só |').includes('<td>só</td><td></td>'));
+
+// tabela no meio do texto não engole os parágrafos em volta
+const tabMisto = render('Segue:\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\nPronto.');
+assert.ok(tabMisto.includes('<p>Segue:</p>') && tabMisto.includes('<p>Pronto.</p>'), tabMisto);
+
+// pipe solto numa frase não vira tabela
+assert.ok(!render('use grep foo | wc -l aqui').includes('<table>'));
 
 // texto e código convivem na mesma resposta
 const misto = render('Segue:\n\n```sh\nls -la\n```\n\nPronto.');

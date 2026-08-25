@@ -6,6 +6,8 @@
   --line: #343948;
   --fg: #e7e9f0;
   --fg-dim: #99a0b3;
+  /* coluna de leitura: linha comprida demais cansa e denuncia página web */
+  --col: 760px;
 }
 
 body {
@@ -48,11 +50,11 @@ button:hover {
 
 /* ---------- barra de título ---------- */
 
+/* uma barra só: arrastar, buscar, menu e botões de janela dividem os 36px */
 #titlebar {
   height: 36px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   background: var(--bg-2);
   border-bottom: 1px solid var(--line);
   -webkit-app-region: drag;
@@ -76,9 +78,17 @@ body.mac #btn-close {
   letter-spacing: 0.04em;
 }
 
+#bar-actions,
 #win-buttons {
   display: flex;
   -webkit-app-region: no-drag;
+}
+
+#bar-actions {
+  margin-left: auto;
+  align-items: center;
+  gap: 2px;
+  padding-right: 6px;
 }
 
 #win-buttons button {
@@ -86,6 +96,19 @@ body.mac #btn-close {
   height: 36px;
   border-radius: 0;
   font-size: 13px;
+}
+
+/* estado do alfinete é cor, não ícone: o emoji 📌 ignorava o color e vivia aceso */
+#btn-pin {
+  color: var(--fg-dim);
+}
+
+#btn-pin svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+  margin: 0 auto;
+  fill: currentColor;
 }
 
 #btn-pin.on {
@@ -99,64 +122,11 @@ body.mac #btn-close {
 /* ---------- layout ---------- */
 
 #shell {
-  display: grid;
-  grid-template-columns: 260px 1fr;
+  display: flex;
   height: calc(100% - 36px);
 }
 
-@media (max-width: 900px) {
-  #shell {
-    grid-template-columns: 0 1fr;
-  }
-  #sidebar {
-    display: none;
-  }
-}
-
-/* ---------- lista de conversas ---------- */
-
-#sidebar {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: var(--bg-2);
-  border-right: 1px solid var(--line);
-}
-
-#side-top {
-  padding: 10px;
-  display: grid;
-  gap: 8px;
-}
-
-#search,
-#input {
-  width: 100%;
-  padding: 8px 10px;
-  color: var(--fg);
-  background: var(--bg-3);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  font: inherit;
-  outline: none;
-}
-
-#search:focus,
-#input:focus {
-  border-color: var(--accent);
-}
-
-#btn-new {
-  padding: 8px;
-  background: var(--bg-3);
-  border: 1px solid var(--line);
-}
-
-#chat-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 6px 10px;
-}
+/* ---------- linha de conversa (usada pela paleta de busca) ---------- */
 
 .chat-item {
   position: relative;
@@ -222,41 +192,57 @@ body.mac #btn-close {
   overflow: hidden;
 }
 
-#conv-avatar {
-  width: 34px;
-  height: 34px;
-  font-size: 14px;
-  cursor: pointer;
+/* tabelas do markdown: mesma casca do bloco de código, barra em cima e rolagem embaixo */
+.msg .table-block {
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-#conv-avatar:hover {
-  border-color: var(--accent);
-  background-color: var(--bg-3);
-}
-
-/* seta de opções, como no WhatsApp: só aparece no hover da linha */
-.chat-chevron {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  width: 22px;
-  height: 20px;
-  padding: 0;
-  font-size: 11px;
-  color: var(--fg-dim);
+.msg .table-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 4px 6px;
   background: var(--bg-3);
-  border-radius: 4px;
-  opacity: 0;
+  border-bottom: 1px solid var(--line);
 }
 
-.chat-item:hover .chat-chevron,
-.chat-item .chat-chevron.aberto {
-  opacity: 1;
+.msg .table-wrap {
+  overflow-x: auto;
 }
 
-.chat-item .marcas {
-  color: var(--fg-dim);
-  font-size: 11px;
+.msg table {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.msg th,
+.msg td {
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+
+.msg th + th,
+.msg td + td {
+  border-left: 1px solid var(--line);
+}
+
+.msg thead th {
+  background: var(--bg-3);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.msg tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.msg thead th {
+  border-top: 0;
 }
 
 /* menu flutuante das opções da conversa */
@@ -289,63 +275,9 @@ body.mac #btn-close {
   background: #c0392b;
 }
 
-/* caixa de texto modal (renomear) */
-#ask-dlg {
-  padding: 16px;
-  color: var(--fg);
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
-}
-
-#ask-dlg::backdrop {
-  background: rgba(0, 0, 0, 0.45);
-}
-
-#ask-dlg label {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-
-#ask-input {
-  width: 320px;
-  padding: 8px 10px;
-  color: var(--fg);
-  background: var(--bg-3);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-}
-
-#ask-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-#ask-dlg menu {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  margin: 14px 0 0;
-  padding: 0;
-}
-
-#ask-dlg menu button {
-  padding: 7px 14px;
-  border-radius: 7px;
-  background: var(--bg-3);
-}
-
-#ask-dlg menu button[value='ok'] {
-  background: var(--accent);
-  color: #111;
-}
-
 /* ---------- busca nas mensagens (lupa / Cmd+K) ---------- */
 
 #btn-find {
-  margin-left: auto;
   padding: 2px 6px;
   color: var(--fg-dim);
   background: none;
@@ -354,8 +286,18 @@ body.mac #btn-close {
   line-height: 1;
 }
 
-#btn-find:hover {
+#btn-find:hover,
+#btn-conv-menu:hover {
   color: var(--fg);
+}
+
+#btn-conv-menu {
+  padding: 2px 6px;
+  color: var(--fg-dim);
+  background: none;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
 }
 
 #find-dlg {
@@ -438,31 +380,21 @@ body.mac #btn-close {
 /* ---------- conversa ---------- */
 
 #main {
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
 }
 
-#conv-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--line);
-}
-
-#conv-title {
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 #messages {
   flex: 1;
   overflow-y: auto;
-  padding: 18px 22px 8px;
+  display: grid;
+  grid-template-columns: minmax(0, var(--col));
+  justify-content: center;
+  align-content: start;
+  padding: 22px 24px 12px;
   scroll-behavior: smooth;
 }
 
@@ -475,17 +407,17 @@ body.mac #btn-close {
   color: var(--fg-dim);
 }
 
+/* a resposta corre solta sobre o fundo; a bolha fica só para quem escreve */
 .msg {
-  max-width: 78%;
-  margin-bottom: 16px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: var(--bg-2);
+  margin-bottom: 26px;
   overflow-wrap: anywhere;
 }
 
 .msg.user {
+  max-width: 78%;
   margin-left: auto;
+  padding: 10px 14px;
+  border-radius: 14px;
   background: var(--user);
 }
 
@@ -606,6 +538,10 @@ body.mac #btn-close {
   opacity: 1;
 }
 
+.msg:not(.user) .msg-tools {
+  margin-left: -8px;
+}
+
 .msg-tools button {
   padding: 2px 8px;
   color: var(--fg-dim);
@@ -639,9 +575,8 @@ body.mac #btn-close {
 /* ---------- compositor ---------- */
 
 #composer {
-  padding: 10px 16px 14px;
+  padding: 10px 24px 14px;
   border-top: 1px solid var(--line);
-  background: var(--bg-2);
 }
 
 #attach-bar {
@@ -654,26 +589,67 @@ body.mac #btn-close {
 #composer-row {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
+  gap: 10px;
+}
+
+/* campo único, como nos apps do Mac: clipe dentro à esquerda, enviar dentro à direita */
+#input-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 5px 5px 5px 7px;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+}
+
+#input-wrap:focus-within {
+  border-color: var(--accent);
 }
 
 #input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 2px;
+  color: var(--fg);
+  background: none;
+  border: 0;
+  outline: none;
+  font: inherit;
   resize: none;
   max-height: 220px;
   line-height: 1.5;
 }
 
 #composer-row button {
-  width: 38px;
-  height: 38px;
+  width: 30px;
+  height: 30px;
   flex: none;
-  font-size: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+#composer-row svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+#btn-attach {
+  color: var(--fg-dim);
+}
+
+#btn-attach:hover {
+  color: var(--fg);
+  background: var(--line);
 }
 
 #btn-send {
   background: var(--accent);
   color: #12141c;
-  border-radius: 50%;
 }
 
 #btn-send:hover {
@@ -719,14 +695,23 @@ body.mac #btn-close {
 /* ---------- personagem em miniatura ---------- */
 
 #stage {
-  width: 46px;
+  width: 40px;
+  height: 40px;
   flex: none;
-  align-self: center;
+  align-self: flex-end;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
   cursor: pointer;
+  transition: background 120ms;
+}
+
+#stage:hover {
+  background: var(--bg-3);
 }
 
 #stage svg {
-  width: 100%;
+  width: 30px;
   height: auto;
   display: block;
   overflow: visible;

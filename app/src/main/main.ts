@@ -39,7 +39,6 @@ import { createChatWindow } from './chatWindow';
 import {
   appendMsg,
   clearChat,
-  deleteChat,
   ensureTitle,
   exportChat,
   listChats,
@@ -55,7 +54,7 @@ import {
   Chat,
 } from './chatStore';
 import { chatSystemPrompt, splitReply } from './hermes';
-import { extractFile } from './extract';
+import { extractFile, tabelaXlsx, tabelaCsv } from './extract';
 import { startTunnel, stopTunnel } from './tunnel';
 import { openSettingsWindow } from './settingsWindow';
 import { ensureSshKey } from './sshKey';
@@ -78,12 +77,27 @@ let hiddenByFullscreen = false;
 let windowsVoices: string[] = [];
 const inFlight = new Map<string, AbortController>();
 
-const ENGINES: { label: string; id: 'xtts' | 'leve' | 'texto' | 'nuvem' }[] = [
-  { label: 'Voz completa (XTTS local — GPU NVIDIA ou Apple Silicon)', id: 'xtts' },
-  { label: 'Voz na nuvem (grátis, sem GPU)', id: 'nuvem' },
-  { label: 'Voz leve (voz do sistema)', id: 'leve' },
-  { label: 'Só texto', id: 'texto' },
+// o rótulo abre com onde a voz é gerada: era a informação que faltava no menu
+const ENGINES: { label: string; id: 'xtts' | 'leve' | 'texto' | 'nuvem'; vozes: string }[] = [
+  {
+    label: 'No seu computador — XTTS (melhor qualidade, usa GPU)',
+    id: 'xtts',
+    vozes: 'Vozes do XTTS, no seu computador',
+  },
+  { label: 'Na nuvem — Edge TTS (grátis, sem GPU)', id: 'nuvem', vozes: 'Vozes da nuvem' },
+  {
+    label: 'No seu computador — voz do sistema (instantânea)',
+    id: 'leve',
+    vozes: 'Vozes instaladas no sistema',
+  },
+  { label: 'Sem voz — só texto', id: 'texto', vozes: '' },
 ];
+
+// item desabilitado vira cabeçalho cinza de seção; é o que o macOS e o Windows dão de graça
+const cabecalho = (label: string): Electron.MenuItemConstructorOptions => ({
+  label,
+  enabled: false,
+});
 
 function voiceProgress(msg: string): void {
   win?.webContents.send('voice-progress', msg);
@@ -295,7 +309,52 @@ const THEMES: { label: string; id: string }[] = [
   { label: 'Grafite', id: 'grafite' },
   { label: 'Roxo ametista', id: 'roxo' },
   { label: 'Ciano ártico', id: 'ciano' },
+  { label: 'Titânio natural', id: 'titanio' },
 ];
+
+function vozesDoMotor(): Electron.MenuItemConstructorOptions[] {
+  const eng = ENGINES.find((e) => e.id === settings.voiceEngine);
+  if (!eng?.vozes) return [];
+
+  const itens: Electron.MenuItemConstructorOptions[] =
+    settings.voiceEngine === 'xtts'
+      ? VOICES.map((v) => ({
+          label: v.label,
+          type: 'radio' as const,
+          checked: settings.ttsSpeaker === v.id,
+          click: () => {
+            settings.ttsSpeaker = v.id;
+            saveSettings(settings);
+            refreshTrayMenu();
+          },
+        }))
+      : settings.voiceEngine === 'nuvem'
+      ? EDGE_VOICES.map((v) => ({
+          label: v.label,
+          type: 'radio' as const,
+          checked: settings.edgeVoice === v.id,
+          click: () => {
+            settings.edgeVoice = v.id;
+            saveSettings(settings);
+            refreshTrayMenu();
+          },
+        }))
+      : windowsVoices.map((name) => ({
+          label: name.replace('Microsoft ', ''),
+          type: 'radio' as const,
+          checked: settings.windowsVoice === name,
+          click: () => {
+            settings.windowsVoice = name;
+            saveSettings(settings);
+            refreshTrayMenu();
+            notifySettingsChanged();
+          },
+        }));
+
+  // sistema sem voz instalada: um cabeçalho sozinho pareceria bug
+  if (!itens.length) return [];
+  return [{ type: 'separator' as const }, cabecalho(eng.vozes), ...itens];
+}
 
 function notifySettingsChanged(): void {
   win?.webContents.send('settings-changed', settings);
@@ -406,6 +465,7 @@ function buildMenu(): Menu {
       {
         label: 'Voz',
         submenu: [
+          cabecalho('Onde a voz é gerada'),
           ...ENGINES.map((eng) => ({
             label: eng.label,
             type: 'radio' as const,
@@ -427,9 +487,10 @@ function buildMenu(): Menu {
               }
             },
           })),
+          ...vozesDoMotor(),
           { type: 'separator' as const },
           {
-            label: 'Sem voz (só texto)',
+            label: 'Silenciar',
             type: 'checkbox' as const,
             checked: settings.muted,
             click: (item: Electron.MenuItem) => {
@@ -439,40 +500,6 @@ function buildMenu(): Menu {
               notifySettingsChanged();
             },
           },
-          { type: 'separator' as const },
-          ...(settings.voiceEngine === 'xtts'
-            ? VOICES.map((v) => ({
-                label: v.label,
-                type: 'radio' as const,
-                checked: settings.ttsSpeaker === v.id,
-                click: () => {
-                  settings.ttsSpeaker = v.id;
-                  saveSettings(settings);
-                  refreshTrayMenu();
-                },
-              }))
-            : settings.voiceEngine === 'nuvem'
-            ? EDGE_VOICES.map((v) => ({
-                label: v.label,
-                type: 'radio' as const,
-                checked: settings.edgeVoice === v.id,
-                click: () => {
-                  settings.edgeVoice = v.id;
-                  saveSettings(settings);
-                  refreshTrayMenu();
-                },
-              }))
-            : windowsVoices.map((name) => ({
-                label: name.replace('Microsoft ', ''),
-                type: 'radio' as const,
-                checked: settings.windowsVoice === name,
-                click: () => {
-                  settings.windowsVoice = name;
-                  saveSettings(settings);
-                  refreshTrayMenu();
-                  notifySettingsChanged();
-                },
-              }))),
         ],
       },
       {
@@ -752,16 +779,31 @@ function setupIpc(): void {
     setActiveChat(chat.id);
     return chat;
   });
-  ipcMain.handle('chat-rename', (_e, id: string, title: string) => setMeta(id, { title }));
-  ipcMain.handle('chat-delete', (_e, id: string) => {
-    deleteChat(id);
-    if (settings.activeChatId === id) setActiveChat('');
-  });
   ipcMain.handle('chat-clear', (_e, id: string) => clearChat(id));
   ipcMain.handle('media-save', (_e, buf: ArrayBuffer, ext: string) => saveMedia(buf, ext));
   ipcMain.handle('media-path', (_e, name: string) => mediaPath(name));
-  ipcMain.handle('chat-meta', (_e, id: string, patch: Record<string, unknown>) => setMeta(id, patch));
   ipcMain.handle('chat-search', (_e, q: string) => searchChats(q));
+
+  ipcMain.handle('msg-save', async (_e, texto: string) => {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath: 'resposta.md',
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    });
+    if (canceled || !filePath) return null;
+    writeFileSync(filePath, texto, 'utf-8');
+    return filePath;
+  });
+
+  ipcMain.handle('table-save', async (_e, linhas: string[][], formato: 'xlsx' | 'csv') => {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath: `tabela.${formato}`,
+      filters: [{ name: formato === 'xlsx' ? 'Planilha do Excel' : 'CSV', extensions: [formato] }],
+    });
+    if (canceled || !filePath) return null;
+    if (formato === 'xlsx') writeFileSync(filePath, await tabelaXlsx(linhas));
+    else writeFileSync(filePath, tabelaCsv(linhas), 'utf-8');
+    return filePath;
+  });
 
   ipcMain.handle('chat-export', async (_e, id: string) => {
     const out = exportChat(id);
@@ -1007,6 +1049,9 @@ if (!gotLock) {
     // O 'appMenu' pronto traz o item Ocultar (Cmd+H), que rouba o atalho de quem escolhe
     // Command+H para falar: a janela some logo depois de aparecer. Daí o menu à mão, sem ele.
     if (process.platform === 'darwin') {
+      // rodando pelo `electron .` o dock mostra o átomo do Electron; o .app já vem com o
+      // ícone pelo electron-builder
+      if (!app.isPackaged) app.dock?.setIcon(path.join(__dirname, 'assets', 'icon-mac.png'));
       Menu.setApplicationMenu(
         Menu.buildFromTemplate([
           {

@@ -122,15 +122,11 @@ export interface HermesBridge {
   chatList(): Promise<ChatSummary[]>;
   chatOpen(id: string): Promise<Chat | null>;
   chatNew(): Promise<Chat>;
-  chatRename(id: string, title: string): Promise<void>;
-  chatDelete(id: string): Promise<void>;
   chatClear(id: string): Promise<Chat | null>;
-  chatMeta(
-    id: string,
-    patch: { title?: string; avatar?: string; pinned?: boolean; archived?: boolean },
-  ): Promise<void>;
   chatSearch(q: string): Promise<SearchHit[]>;
   chatExport(id: string): Promise<string | null>;
+  tableSave(linhas: string[][], formato: 'xlsx' | 'csv'): Promise<string | null>;
+  msgSave(texto: string): Promise<string | null>;
   chatTruncate(id: string, index: number): Promise<Chat | null>;
   chatAsk(req: {
     chatId: string;
